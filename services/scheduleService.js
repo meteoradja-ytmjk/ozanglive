@@ -1287,14 +1287,23 @@ class ScheduleService {
             const resolvedAudioId = b.audioId || template.audio_id || null;
             
             // Resolve duration with smart fallback to video library so it never runs unlimited unintentionally
-            let resolvedSlotDurationMins = b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null;
-            if (!resolvedSlotDurationMins && resolvedVideoId) {
+            const isSlotLoop = (b.loopVideo !== undefined)
+              ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0')
+              : (template.loop_video !== false && template.loop_video !== 0 && template.loop_video !== '0');
+            const isSlotUnlimited = b.isUnlimited === true || b.isUnlimited === 'true' || template.is_unlimited === 1 || template.is_unlimited === true;
+
+            let resolvedSlotDurationMins = isSlotUnlimited
+              ? null
+              : (b.streamDurationMinutes || (((parseInt(b.durationHours) || 0) * 60) + (parseInt(b.durationMinutes) || 0)) || template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null);
+
+            // Only fallback to video duration if loop is disabled (play once) AND not explicitly unlimited
+            if (!resolvedSlotDurationMins && resolvedVideoId && !isSlotLoop && !isSlotUnlimited) {
               resolvedSlotDurationMins = await getVideoDurationMins(resolvedVideoId);
               if (resolvedSlotDurationMins) {
-                console.log(`[ScheduleService] Multi-broadcast item #${i + 1} auto-resolved duration from video #${resolvedVideoId}: ${resolvedSlotDurationMins} mins`);
+                console.log(`[ScheduleService] Multi-broadcast item #${i + 1} auto-resolved duration from video #${resolvedVideoId} (loop disabled): ${resolvedSlotDurationMins} mins`);
               }
             }
-            const resolvedSlotHours = resolvedSlotDurationMins ? Math.floor(resolvedSlotDurationMins / 60) : (b.durationHours !== undefined ? (parseInt(b.durationHours) || 0) : (template.duration_hours || 0));
+            const resolvedSlotHours = resolvedSlotDurationMins ? Math.floor(resolvedSlotDurationMins / 60) : null;
 
             try {
               const streamData = {
@@ -1309,7 +1318,7 @@ class ScheduleService {
                 resolution: '1280x720',
                 fps: 30,
                 orientation: 'horizontal',
-                loop_video: (b.loopVideo !== undefined) ? (b.loopVideo !== false && b.loopVideo !== 0 && b.loopVideo !== '0') : (template.loop_video !== false),
+                loop_video: isSlotLoop,
                 stream_duration_hours: resolvedSlotHours,
                 stream_duration_minutes: resolvedSlotDurationMins,
                 duration: resolvedSlotDurationMins,
@@ -1574,14 +1583,21 @@ class ScheduleService {
         const resolvedStreamKey = targetStreamKey || result.streamKey || (template.stream_id ? String(template.stream_id) : '');
         const resolvedRtmpUrl = result.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2';
         
-        let resolvedSingleDurationMins = template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null;
-        if (!resolvedSingleDurationMins && template.video_id) {
+        const isTemplateLoop = template.loop_video !== false && template.loop_video !== 0 && template.loop_video !== '0';
+        const isTemplateUnlimited = template.is_unlimited === 1 || template.is_unlimited === true || template.isUnlimited === true || template.isUnlimited === 'true';
+
+        let resolvedSingleDurationMins = isTemplateUnlimited
+          ? null
+          : (template.stream_duration_minutes || (((parseInt(template.duration_hours) || 0) * 60) + (parseInt(template.duration_minutes) || 0)) || null);
+
+        // Only fallback to video duration if loop is disabled (play once) AND not explicitly unlimited
+        if (!resolvedSingleDurationMins && template.video_id && !isTemplateLoop && !isTemplateUnlimited) {
           resolvedSingleDurationMins = await getVideoDurationMins(template.video_id);
           if (resolvedSingleDurationMins) {
-            console.log(`[ScheduleService] Template "${template.name}" auto-resolved duration from video #${template.video_id}: ${resolvedSingleDurationMins} mins`);
+            console.log(`[ScheduleService] Template "${template.name}" auto-resolved duration from video #${template.video_id} (loop disabled): ${resolvedSingleDurationMins} mins`);
           }
         }
-        const resolvedSingleHours = resolvedSingleDurationMins ? Math.floor(resolvedSingleDurationMins / 60) : (template.duration_hours || 0);
+        const resolvedSingleHours = resolvedSingleDurationMins ? Math.floor(resolvedSingleDurationMins / 60) : null;
 
         try {
           const streamData = {
@@ -1596,7 +1612,7 @@ class ScheduleService {
             resolution: '1280x720',
             fps: 30,
             orientation: 'horizontal',
-            loop_video: template.loop_video !== false,
+            loop_video: isTemplateLoop,
             stream_duration_hours: resolvedSingleHours,
             stream_duration_minutes: resolvedSingleDurationMins,
             duration: resolvedSingleDurationMins,

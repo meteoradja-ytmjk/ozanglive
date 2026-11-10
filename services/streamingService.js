@@ -1229,7 +1229,9 @@ function isUnlimitedStream(stream) {
     return true;
   }
 
-  const hasDuration = (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) || (stream.duration && stream.duration > 0);
+  const hasDuration = (stream.stream_duration_minutes && stream.stream_duration_minutes > 0) || 
+                      (stream.stream_duration_hours && stream.stream_duration_hours > 0) || 
+                      (stream.duration && stream.duration > 0);
   if (hasDuration) return false;
 
   const isOnce = !stream.schedule_type || stream.schedule_type === 'once';
@@ -1314,8 +1316,15 @@ function clearDurationInfo(streamId) {
  */
 function isStreamDurationExceeded(streamId) {
   const info = getDurationInfo(streamId);
-  if (!info || !info.expectedEndTime) return false;
-  return new Date() >= info.expectedEndTime;
+  if (!info || !info.expectedEndTime) {
+    const origRemaining = getOriginalRemainingMs(streamId);
+    if (origRemaining !== null) {
+      return origRemaining <= 10000;
+    }
+    return false;
+  }
+  // Toleransi 10 detik agar packet boundaries FFmpeg (-t) tidak dianggap error/crash
+  return (Date.now() + 10000) >= info.expectedEndTime.getTime();
 }
 
 /**
@@ -2754,13 +2763,47 @@ async function startStream(streamId, options = {}) {
         }
         return;
       }
+
+      const streamData = await Stream.findById(streamId);
+      const isUnlimited = isUnlimitedStream(streamData);
+
+      // If loop is OFF and no finite duration was set, the video played once and reached EOF naturally (code === 0)
+      const isLoopDisabled = streamData && (streamData.loop_video === false || streamData.loop_video === 0 || streamData.loop_video === '0' || streamData.loop_video === 'false');
+      const isNaturalMediaEnd = code === 0 && !signal && isLoopDisabled && isUnlimited;
+
+      if (isNaturalMediaEnd) {
+        console.log(`[StreamingService] Stream ${streamId} stop reason: media ended naturally (loop disabled, code 0)`);
+        addStreamLog(streamId, `Stream stop reason: media ended naturally (loop disabled)`);
+        rtmpHealthMonitor.stopMonitoring(streamId);
+        clearDurationInfo(streamId);
+        clearOriginalTiming(streamId);
+        if (wasActive) {
+          try {
+            const newStatus = getStatusAfterStreamEnd(streamData);
+            await Stream.updateStatus(streamId, newStatus, streamData.user_id);
+            const updatedStream = await Stream.findById(streamId);
+            await saveStreamHistory(updatedStream);
+
+            // End YouTube broadcast so YouTube Studio / dashboard stops immediately
+            await endYouTubeBroadcastForStream(updatedStream || streamData);
+            await handleUnlistReplayOnEnd(updatedStream || streamData);
+
+            // Auto-cleanup completed stream from Control Room
+            await autoCleanupTemplateStream(updatedStream || streamData, 'media-ended');
+            if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+              schedulerService.handleStreamStopped(streamId);
+            }
+          } catch (error) {
+            console.error(`[StreamingService] Error updating stream status after media completion: ${error.message}`);
+          }
+        }
+        return;
+      }
       
       // Decide whether the stream should keep running after this (unexpected) exit.
       // The user wants the actual end-live time to match the duration they configured,
       // so ANY early exit (clean or error) must reconnect while time still remains.
       const remainingTime = getRemainingTime(streamId);
-      const streamData = await Stream.findById(streamId);
-      const isUnlimited = isUnlimitedStream(streamData);
 
       // Authoritative remaining time: anchored to the ORIGINAL start time + full
       // configured duration, so it stays correct across multiple reconnect cycles.

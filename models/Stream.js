@@ -963,12 +963,17 @@ class Stream {
             ? JSON.stringify(originalSettings.schedule_days)
             : null;
 
+          const origDurMins = originalSettings.stream_duration_minutes || null;
+          const origDurHours = origDurMins ? Math.floor(origDurMins / 60) : null;
+
           // Update stream with original values
           db.run(
             `UPDATE streams SET
               schedule_time = ?,
               recurring_time = ?,
               stream_duration_minutes = ?,
+              stream_duration_hours = ?,
+              duration = ?,
               schedule_type = ?,
               schedule_days = ?,
               recurring_enabled = ?,
@@ -977,7 +982,9 @@ class Stream {
             [
               originalSettings.schedule_time,
               originalSettings.recurring_time,
-              originalSettings.stream_duration_minutes,
+              origDurMins,
+              origDurHours,
+              origDurMins,
               originalSettings.schedule_type || 'once',
               schedule_days_json,
               originalSettings.recurring_enabled !== false ? 1 : 0,

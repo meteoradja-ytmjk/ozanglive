@@ -5312,6 +5312,16 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
       }
     }
 
+    const isExplicitUnlimited = req.body.isUnlimited === true || req.body.isUnlimited === 'true' || req.body.isUnlimited === 1 || req.body.isUnlimited === '1';
+    let initDurationHours = parseInt(req.body.streamDurationHours) || 0;
+    let initDurationMinutes = parseInt(req.body.streamDurationMinutes) || 0;
+    let initTotalMinutes = isExplicitUnlimited ? 0 : ((initDurationHours * 60) + initDurationMinutes);
+    if (!isExplicitUnlimited && initTotalMinutes === 0 && req.body.stream_duration_minutes !== undefined) {
+      initTotalMinutes = parseInt(req.body.stream_duration_minutes) || 0;
+      initDurationHours = Math.floor(initTotalMinutes / 60);
+      initDurationMinutes = initTotalMinutes % 60;
+    }
+
     const streamData = {
       title: req.body.streamTitle,
       video_id: req.body.videoId || null,
@@ -5324,16 +5334,12 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
       resolution: req.body.resolution || '1280x720',
       fps: parseInt(req.body.fps) || 30,
       orientation: req.body.orientation || 'horizontal',
-      loop_video: req.body.loopVideo === 'true' || req.body.loopVideo === true,
-      // Duration in minutes (stored as stream_duration_minutes in DB)
+      loop_video: isExplicitUnlimited ? 1 : (req.body.loopVideo === 'true' || req.body.loopVideo === true),
+      // Duration in minutes and hours (stored consistently in DB)
       // Priority: If user sets duration (hours + minutes), use that and ignore end_time for duration
-      stream_duration_minutes: (() => {
-        const hours = parseInt(req.body.streamDurationHours) || 0;
-        const minutes = parseInt(req.body.streamDurationMinutes) || 0;
-        const totalMinutes = (hours * 60) + minutes;
-        console.log(`[API] Duration calculation: ${hours}h + ${minutes}m = ${totalMinutes} total minutes`);
-        return totalMinutes > 0 ? totalMinutes : null;
-      })(),
+      stream_duration_minutes: initTotalMinutes > 0 ? initTotalMinutes : null,
+      stream_duration_hours: initTotalMinutes > 0 ? initDurationHours : null,
+      duration: initTotalMinutes > 0 ? initTotalMinutes : null,
       // Recurring schedule fields
       schedule_type: req.body.scheduleType || 'once',
       schedule_days: scheduleDays,
@@ -5371,8 +5377,8 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
       streamData.schedule_time = scheduleStartDate.toISOString();
       streamData.status = 'scheduled';
 
-      // Only use end_time for duration calculation if user hasn't set explicit duration
-      if (req.body.scheduleEndTime && !hasExplicitDuration) {
+      // Only use end_time for duration calculation if user hasn't set explicit duration and not unlimited
+      if (req.body.scheduleEndTime && !hasExplicitDuration && !isExplicitUnlimited) {
         const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
         if (!scheduleEndDate) {
           return res.status(400).json({
@@ -5391,11 +5397,12 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
         streamData.end_time = scheduleEndDate.toISOString();
         const durationMs = scheduleEndDate - scheduleStartDate;
         const durationMinutes = Math.round(durationMs / (1000 * 60));
-        // Set stream_duration_minutes from end_time calculation
+        // Set stream_duration_minutes, stream_duration_hours, and duration from end_time calculation
         streamData.stream_duration_minutes = durationMinutes > 0 ? durationMinutes : null;
+        streamData.stream_duration_hours = durationMinutes > 0 ? Math.floor(durationMinutes / 60) : null;
         streamData.duration = durationMinutes > 0 ? durationMinutes : null;
         console.log(`[API] Duration from end_time: ${durationMinutes} minutes`);
-      } else if (req.body.scheduleEndTime && hasExplicitDuration) {
+      } else if (req.body.scheduleEndTime && hasExplicitDuration && !isExplicitUnlimited) {
         // User set both duration and end_time - use duration, but still store end_time for reference
         const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
         if (scheduleEndDate) {
@@ -5403,8 +5410,8 @@ app.post('/api/streams', isAuthenticated, autoResolveYouTubeStreamKey, [
         }
         console.log(`[API] Using explicit duration (${streamData.stream_duration_minutes} min), end_time stored for reference only`);
       }
-      // If no end_time and no duration, stream will be unlimited
-    } else if (req.body.scheduleEndTime) {
+      // If no end_time and no duration (or explicit unlimited), stream will be unlimited
+    } else if (req.body.scheduleEndTime && !isExplicitUnlimited) {
       const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
       if (scheduleEndDate) {
         streamData.end_time = scheduleEndDate.toISOString();
@@ -5810,17 +5817,35 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
 
     // Handle stream duration (in minutes - new format: hours + minutes)
     // IMPORTANT: If user sets duration, this takes priority over end_time
+    const isExplicitUnlimited = req.body.isUnlimited === true || req.body.isUnlimited === 'true' || req.body.isUnlimited === 1 || req.body.isUnlimited === '1';
     let hasExplicitDuration = false;
-    if (req.body.streamDurationHours !== undefined || req.body.streamDurationMinutes !== undefined) {
+    if (isExplicitUnlimited) {
+      updateData.stream_duration_minutes = null;
+      updateData.stream_duration_hours = null;
+      updateData.duration = null;
+      updateData.end_time = null;
+      hasExplicitDuration = false;
+      console.log(`[API Update] Stream explicitly set to UNLIMITED (duration and end_time cleared)`);
+    } else if (req.body.streamDurationHours !== undefined || req.body.streamDurationMinutes !== undefined) {
       const hours = parseInt(req.body.streamDurationHours) || 0;
       const minutes = parseInt(req.body.streamDurationMinutes) || 0;
       const totalMinutes = (hours * 60) + minutes;
       updateData.stream_duration_minutes = totalMinutes > 0 ? totalMinutes : null;
+      updateData.stream_duration_hours = totalMinutes > 0 ? hours : null;
+      updateData.duration = totalMinutes > 0 ? totalMinutes : null;
+      if (totalMinutes === 0) {
+        updateData.end_time = null;
+      }
       hasExplicitDuration = totalMinutes > 0;
       console.log(`[API Update] Duration set: ${hours}h + ${minutes}m = ${totalMinutes} minutes, hasExplicitDuration=${hasExplicitDuration}`);
     } else if (req.body.stream_duration_minutes !== undefined) {
       const totalMinutes = parseInt(req.body.stream_duration_minutes) || 0;
       updateData.stream_duration_minutes = totalMinutes > 0 ? totalMinutes : null;
+      updateData.stream_duration_hours = totalMinutes > 0 ? Math.floor(totalMinutes / 60) : null;
+      updateData.duration = totalMinutes > 0 ? totalMinutes : null;
+      if (totalMinutes === 0) {
+        updateData.end_time = null;
+      }
       hasExplicitDuration = totalMinutes > 0;
     }
 
@@ -5904,9 +5929,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         updateData.start_time = null;
       }
 
-      // FIXED: Only use end_time for duration if user hasn't set explicit duration
+      // FIXED: Only use end_time for duration if user hasn't set explicit duration and not unlimited
       const rawEndTime = req.body.scheduleEndTime || req.body.end_time;
-      if (rawEndTime && !hasExplicitDuration) {
+      if (rawEndTime && !hasExplicitDuration && !isExplicitUnlimited) {
         const scheduleEndDate = parseWIBDateTimeLocal(rawEndTime);
         if (!scheduleEndDate) {
           return res.status(400).json({
@@ -5926,8 +5951,9 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         const durationMs = scheduleEndDate - scheduleStartDate;
         const durationMinutes = Math.round(durationMs / (1000 * 60));
         updateData.stream_duration_minutes = durationMinutes > 0 ? durationMinutes : null;
+        updateData.stream_duration_hours = durationMinutes > 0 ? Math.floor(durationMinutes / 60) : null;
         updateData.duration = durationMinutes > 0 ? durationMinutes : null;
-      } else if (rawEndTime && hasExplicitDuration) {
+      } else if (rawEndTime && hasExplicitDuration && !isExplicitUnlimited) {
         const scheduleEndDate = parseWIBDateTimeLocal(rawEndTime);
         if (scheduleEndDate) {
           updateData.end_time = scheduleEndDate.toISOString();
@@ -5942,7 +5968,7 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         updateData.status = 'offline';
       }
 
-      if (req.body.scheduleEndTime) {
+      if (req.body.scheduleEndTime && !isExplicitUnlimited) {
         const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
         if (scheduleEndDate) {
           updateData.end_time = scheduleEndDate.toISOString();
@@ -5951,10 +5977,11 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
         updateData.end_time = null;
         if (!hasExplicitDuration) {
           updateData.stream_duration_minutes = null;
+          updateData.stream_duration_hours = null;
           updateData.duration = null;
         }
       }
-    } else if (req.body.scheduleEndTime) {
+    } else if (req.body.scheduleEndTime && !isExplicitUnlimited) {
       const scheduleEndDate = parseWIBDateTimeLocal(req.body.scheduleEndTime);
       if (scheduleEndDate) {
         updateData.end_time = scheduleEndDate.toISOString();
@@ -5963,6 +5990,7 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       updateData.end_time = null;
       if (!hasExplicitDuration) {
         updateData.stream_duration_minutes = null;
+        updateData.stream_duration_hours = null;
         updateData.duration = null;
       }
     }
@@ -14642,6 +14670,10 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
 
     console.log('[create-broadcast-from-template] Using streamId:', template.stream_id, 'streamKey:', template.stream_key ? '***' : 'none');
 
+    // Check if template is intended for unlimited duration
+    const isTemplateUnlimited = !template.stream_duration_minutes || template.stream_duration_minutes <= 0 || template.is_unlimited;
+    const templateAutoStop = !isTemplateUnlimited && (template.enable_auto_stop === 1 || template.enable_auto_stop === true || template.enable_auto_stop === '1' || template.enable_auto_stop === 'true');
+
     // Create broadcast on YouTube
     const cleanDescription = (template.description && !template.description.startsWith('[')) ? template.description : '';
     const broadcast = await youtubeService.createBroadcast(accessToken, {
@@ -14659,7 +14691,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
       // IMPORTANT: Always enable auto-start when creating from template
       // This ensures YouTube broadcast starts automatically when stream begins
       enableAutoStart: true,
-      enableAutoStop: true
+      enableAutoStop: templateAutoStop
     });
 
     const broadcastId = broadcast.id || broadcast.broadcastId;
@@ -14671,7 +14703,7 @@ app.post('/api/youtube/templates/:id/create-broadcast', isAuthenticated, async (
         userId: req.session.userId,
         accountId: template.account_id || null,
         enableAutoStart: true,
-        enableAutoStop: true,
+        enableAutoStop: templateAutoStop,
         unlistReplayOnEnd: true,
         originalPrivacyStatus: template.privacy_status || 'unlisted',
         thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,
@@ -14808,6 +14840,10 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
     for (const schedule of schedules) {
       try {
         const cleanDescription = (template.description && !template.description.startsWith('[')) ? template.description : '';
+        // Check if template is intended for unlimited duration
+        const isTemplateUnlimited = !template.stream_duration_minutes || template.stream_duration_minutes <= 0 || template.is_unlimited;
+        const bulkTemplateAutoStop = !isTemplateUnlimited && (template.enable_auto_stop === 1 || template.enable_auto_stop === true || template.enable_auto_stop === '1' || template.enable_auto_stop === 'true');
+
         const broadcast = await youtubeService.createBroadcast(accessToken, {
           title: template.title,
           description: cleanDescription,
@@ -14823,7 +14859,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
           // IMPORTANT: Always enable auto-start when creating from template
           // This ensures YouTube broadcast starts automatically when stream begins
           enableAutoStart: true,
-          enableAutoStop: true
+          enableAutoStop: bulkTemplateAutoStop
         });
 
         const bulkBroadcastId = broadcast.id || broadcast.broadcastId;
@@ -14835,7 +14871,7 @@ app.post('/api/youtube/templates/:id/bulk-create', isAuthenticated, async (req, 
             userId: req.session.userId,
             accountId: template.account_id || null,
             enableAutoStart: true,
-            enableAutoStop: true,
+            enableAutoStop: bulkTemplateAutoStop,
             unlistReplayOnEnd: true,
             originalPrivacyStatus: template.privacy_status || 'unlisted',
             thumbnailFolder: template.thumbnail_folder !== undefined ? template.thumbnail_folder : null,

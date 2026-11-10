@@ -5308,20 +5308,27 @@ if (createBroadcastForm) {
           finalScheduleStartTime = document.getElementById('scheduledStartTime')?.value || '';
         }
 
+        const isUnlimited = document.getElementById('studioUnlimitedToggle')?.checked ?? true;
+        const durationHours = isUnlimited ? '0' : (document.getElementById('studioStreamDurationHours')?.value || '0');
+        const durationMinutes = isUnlimited ? '0' : (document.getElementById('studioStreamDurationMinutes')?.value || '0');
+        const loopVideo = isUnlimited ? 'true' : (document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false');
+        const scheduleEndTime = (scheduleType === 'once' && !isUnlimited) ? (document.getElementById('studioScheduleEndTime')?.value || '') : '';
         const isAutoStop = document.getElementById('studioEnableAutoStopToggle')?.checked ? 'true' : 'false';
+
         const updatePayload = {
           streamTitle: document.getElementById('broadcastTitle').value,
           description: document.getElementById('broadcastDescription').value,
           videoId: document.getElementById('studioSelectedVideoId')?.value || null,
           audioId: document.getElementById('studioSelectedAudioId')?.value || null,
-          streamDurationHours: document.getElementById('studioStreamDurationHours')?.value || '0',
-          streamDurationMinutes: document.getElementById('studioStreamDurationMinutes')?.value || '0',
-          loopVideo: document.getElementById('studioLoopVideoToggle')?.checked ? 'true' : 'false',
+          isUnlimited: isUnlimited ? 'true' : 'false',
+          streamDurationHours: durationHours,
+          streamDurationMinutes: durationMinutes,
+          loopVideo: loopVideo,
           scheduleType: scheduleType,
           scheduleStartTime: finalScheduleStartTime,
-          scheduleEndTime: scheduleType === 'once' ? (document.getElementById('studioScheduleEndTime')?.value || '') : '',
-          enableAutoStop: isAutoStop,
-          enable_auto_stop: isAutoStop === 'true',
+          scheduleEndTime: scheduleEndTime,
+          enableAutoStop: isUnlimited ? 'false' : isAutoStop,
+          enable_auto_stop: !isUnlimited && isAutoStop === 'true',
           recurringTime: recurringTime,
           scheduleDays: document.getElementById('studioScheduleDays')?.value || '[]',
           recurringEnabled: document.getElementById('studioRecurringEnabled')?.checked ? 'true' : 'false',
