@@ -8961,11 +8961,13 @@ async function recreateFromTemplate(templateId) {
       closeTemplateLibraryModal();
       
       // Pre-load studio videos so each slot can resolve its own video duration
-      if (!window.allStudioVideos) {
+      if (!Array.isArray(window.allStudioVideos) || window.allStudioVideos.length === 0) {
         try {
-          const resV = await fetch('/api/youtube/videos');
+          const resV = await fetch('/api/stream/content', {
+            headers: { 'X-CSRF-Token': getCsrfToken() }
+          });
           const vData = await resV.json();
-          window.allStudioVideos = Array.isArray(vData) ? vData : (vData.videos || []);
+          window.allStudioVideos = Array.isArray(vData) ? vData : [];
         } catch (_) {}
       }
 
@@ -9105,6 +9107,23 @@ function calculateUpcomingDateTimeForSlot(timeStr, pattern = 'daily', days = nul
 }
 window.calculateUpcomingDateTimeForSlot = calculateUpcomingDateTimeForSlot;
 
+// Safely parse studio media duration (seconds, float, "MM:SS", or "HH:MM:SS") to integer seconds
+function parseStudioMediaDuration(durationVal) {
+  if (!durationVal) return 0;
+  if (typeof durationVal === 'number') return Math.max(0, Math.round(durationVal));
+  const str = String(durationVal).trim();
+  if (/^\d+(\.\d+)?$/.test(str)) return Math.max(0, Math.round(parseFloat(str)));
+  if (str.includes(':')) {
+    const parts = str.split(':').map(p => parseInt(p, 10));
+    if (parts.every(p => !isNaN(p))) {
+      if (parts.length === 2) return Math.max(0, parts[0] * 60 + parts[1]);
+      if (parts.length === 3) return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+    }
+  }
+  return 0;
+}
+window.parseStudioMediaDuration = parseStudioMediaDuration;
+
 // Open Re-create from Template Modal
 function openRecreateFromTemplateModal(template) {
   window.currentRecreateTemplate = template;
@@ -9215,11 +9234,11 @@ function openRecreateFromTemplateModal(template) {
       let bHours = parseInt(b.durationHours, 10) || Math.floor(bTotalMins / 60);
       let bMins = parseInt(b.durationMinutes, 10) || (bTotalMins % 60);
 
-      const slotVideoId = b.videoId || b.video_id || (i === 0 ? template.video_id : null) || null;
+      const slotVideoId = b.videoId || b.video_id || template.video_id || null;
       if (bTotalMins === 0 && slotVideoId && Array.isArray(window.allStudioVideos)) {
         const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(slotVideoId));
         if (matchedVid && matchedVid.duration) {
-          const vSecs = Math.round(Number(matchedVid.duration));
+          const vSecs = parseStudioMediaDuration(matchedVid.duration);
           if (vSecs > 0) {
             bTotalMins = Math.max(1, Math.round(vSecs / 60));
             bHours = Math.floor(bTotalMins / 60);
@@ -9294,7 +9313,7 @@ function openRecreateFromTemplateModal(template) {
     if (finalSingleTotalMins === 0 && template.video_id && Array.isArray(window.allStudioVideos)) {
       const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(template.video_id));
       if (matchedVid && matchedVid.duration) {
-        const vSecs = Math.round(Number(matchedVid.duration));
+        const vSecs = parseStudioMediaDuration(matchedVid.duration);
         if (vSecs > 0) {
           finalSingleTotalMins = Math.max(1, Math.round(vSecs / 60));
           finalSingleHours = Math.floor(finalSingleTotalMins / 60);
@@ -9603,6 +9622,28 @@ function renderRecreateSlotList() {
         <span>Durasi: <strong class="text-white">${durStr}</strong></span>
       </span>`;
 
+    let videoBadgeHtml = '';
+    const resolvedVidId = group.videoId || template.video_id;
+    if (resolvedVidId) {
+      const vidName = group.videoName || getStudioVideoName(resolvedVidId);
+      videoBadgeHtml = `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-purple-300 font-mono bg-purple-500/15 border border-purple-500/30 truncate max-w-[180px] sm:max-w-[220px] shadow-2xs" title="Video: ${escapeHtml(vidName)}">
+          <i class="ti ti-video text-[11px] text-purple-400 flex-shrink-0"></i>
+          <span class="truncate">${escapeHtml(vidName)}</span>
+        </span>`;
+    }
+
+    let audioBadgeHtml = '';
+    const resolvedAudId = group.audioId || template.audio_id;
+    if (resolvedAudId) {
+      const audName = group.audioName || getStudioAudioName(resolvedAudId);
+      audioBadgeHtml = `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-pink-300 font-mono bg-pink-500/15 border border-pink-500/30 truncate max-w-[150px] shadow-2xs" title="Audio: ${escapeHtml(audName)}">
+          <i class="ti ti-music text-[11px] text-pink-400 flex-shrink-0"></i>
+          <span class="truncate">${escapeHtml(audName)}</span>
+        </span>`;
+    }
+
     let titleContentHtml = '';
     if (isEditingTitle) {
       titleContentHtml = `
@@ -9653,6 +9694,8 @@ function renderRecreateSlotList() {
               ${titleDisplayBody}
               <div class="flex items-center gap-2 flex-wrap mt-1.5">
                 ${thumbnailBadgeHtml}
+                ${videoBadgeHtml}
+                ${audioBadgeHtml}
                 ${durationBadgeHtml}
               </div>
             </div>
@@ -9867,13 +9910,19 @@ let recreateCachedStreams = null;
 
 async function preloadStudioMediaForRecreate() {
   try {
-    if (!window.allStudioVideos) {
-      const resV = await fetch('/api/stream/content');
-      window.allStudioVideos = await resV.json();
+    if (!Array.isArray(window.allStudioVideos) || window.allStudioVideos.length === 0) {
+      const resV = await fetch('/api/stream/content', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const dataV = await resV.json();
+      window.allStudioVideos = Array.isArray(dataV) ? dataV : [];
     }
-    if (!window.allStudioAudios) {
-      const resA = await fetch('/api/stream/audios');
-      window.allStudioAudios = await resA.json();
+    if (!Array.isArray(window.allStudioAudios) || window.allStudioAudios.length === 0) {
+      const resA = await fetch('/api/stream/audios', {
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      });
+      const dataA = await resA.json();
+      window.allStudioAudios = Array.isArray(dataA) ? dataA : [];
     }
     // Re-render to resolve video and audio names if list is already open
     if (window.recreateBroadcastGroups && window.recreateBroadcastGroups.length > 0) {
@@ -10010,7 +10059,7 @@ async function openRecreateGroupFullEditor(groupIndex) {
   if (totalM === 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
     const matchedV = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
     if (matchedV && matchedV.duration) {
-      const vSecs = Math.round(Number(matchedV.duration));
+      const vSecs = parseStudioMediaDuration(matchedV.duration);
       if (vSecs > 0) {
         totalM = Math.max(1, Math.round(vSecs / 60));
         h = Math.floor(totalM / 60);
@@ -10050,7 +10099,7 @@ async function openRecreateGroupFullEditor(groupIndex) {
 
   // Load dropdown options async
   loadRecreateSlotThumbnailFolders(group.thumbnailFolder !== undefined ? group.thumbnailFolder : template.thumbnail_folder);
-  loadRecreateSlotStreams(template.account_id, group.streamId || template.stream_id, group.streamKey || template.stream_key);
+  loadRecreateSlotStreams(group.accountId || template.account_id, group.streamId || template.stream_id, group.streamKey || template.stream_key);
   loadRecreateSlotVideos(group.videoId || template.video_id);
   loadRecreateSlotAudios(group.audioId || template.audio_id);
 }
@@ -10089,22 +10138,34 @@ function updateRecreateSlotDurationSummary() {
 window.updateRecreateSlotDurationSummary = updateRecreateSlotDurationSummary;
 
 function handleRecreateSlotVideoChange(videoId) {
-  if (!videoId || !Array.isArray(window.allStudioVideos)) return;
-  const matched = window.allStudioVideos.find(v => String(v.id) === String(videoId));
+  if (!videoId) return;
+  let matched = null;
+  if (Array.isArray(window.allStudioVideos)) {
+    matched = window.allStudioVideos.find(v => String(v.id) === String(videoId));
+  }
+
+  let vSecs = 0;
   if (matched && matched.duration) {
-    const vSecs = Math.round(Number(matched.duration));
-    if (vSecs > 0) {
-      const totalM = Math.max(1, Math.round(vSecs / 60));
-      const h = Math.floor(totalM / 60);
-      const m = totalM % 60;
-      const hInput = document.getElementById('recreateSlotEditDurationHours');
-      const mInput = document.getElementById('recreateSlotEditDurationMinutes');
-      if (hInput && mInput) {
-        hInput.value = h;
-        mInput.value = m;
-        updateRecreateSlotDurationSummary();
-        showToast(`Durasi disesuaikan dengan video: ${h > 0 ? `${h}j ${m}m` : `${m} menit`}`, 'info');
-      }
+    vSecs = parseStudioMediaDuration(matched.duration);
+  } else {
+    const select = document.getElementById('recreateSlotEditVideoSelect');
+    const opt = select?.selectedOptions ? select.selectedOptions[0] : null;
+    if (opt?.dataset?.duration) {
+      vSecs = parseStudioMediaDuration(opt.dataset.duration);
+    }
+  }
+
+  if (vSecs > 0) {
+    const totalM = Math.max(1, Math.round(vSecs / 60));
+    const h = Math.floor(totalM / 60);
+    const m = totalM % 60;
+    const hInput = document.getElementById('recreateSlotEditDurationHours');
+    const mInput = document.getElementById('recreateSlotEditDurationMinutes');
+    if (hInput && mInput) {
+      hInput.value = h;
+      mInput.value = m;
+      updateRecreateSlotDurationSummary();
+      showToast(`Durasi disesuaikan dengan video: ${h > 0 ? `${h}j ${m}m` : `${m} menit`}`, 'info');
     }
   }
 }
@@ -10240,10 +10301,40 @@ async function loadRecreateSlotVideos(selectedVideoId) {
   if (!select) return;
 
   try {
-    if (!window.allStudioVideos) {
-      const res = await fetch('/api/stream/content');
-      const content = await res.json();
-      window.allStudioVideos = content;
+    if (!Array.isArray(window.allStudioVideos) || window.allStudioVideos.length === 0) {
+      select.innerHTML = '<option value="">-- Memuat video dari galeri... --</option>';
+      try {
+        const res = await fetch('/api/stream/content', {
+          headers: { 'X-CSRF-Token': getCsrfToken() }
+        });
+        const content = await res.json();
+        window.allStudioVideos = Array.isArray(content) ? content : [];
+      } catch (err) {
+        console.error('Error fetching stream content:', err);
+      }
+    }
+
+    // Fallback: If still empty, try /api/videos
+    if (!Array.isArray(window.allStudioVideos) || window.allStudioVideos.length === 0) {
+      try {
+        const resV = await fetch('/api/videos', {
+          headers: { 'X-CSRF-Token': getCsrfToken() }
+        });
+        const dataV = await resV.json();
+        if (dataV && Array.isArray(dataV.videos)) {
+          window.allStudioVideos = dataV.videos.map(v => ({
+            id: v.id,
+            name: v.title || v.filename,
+            title: v.title || v.filename,
+            duration: v.duration ? `${Math.floor(v.duration / 60)}:${String(Math.floor(v.duration % 60)).padStart(2, '0')}` : '0:00',
+            resolution: v.resolution || 'Auto',
+            folder_name: v.folder_name || null,
+            type: 'video'
+          }));
+        }
+      } catch (err) {
+        console.warn('Failed fallback to /api/videos:', err);
+      }
     }
 
     select.innerHTML = '<option value="">-- Tetap Gunakan Video Template --</option>';
@@ -10270,6 +10361,7 @@ async function loadRecreateSlotVideos(selectedVideoId) {
         playlists.forEach(pl => {
           const opt = document.createElement('option');
           opt.value = pl.id;
+          opt.dataset.duration = pl.duration || '';
           opt.textContent = `📋 [Playlist] ${pl.name} (${pl.duration || ''})`;
           plGroup.appendChild(opt);
         });
@@ -10282,6 +10374,7 @@ async function loadRecreateSlotVideos(selectedVideoId) {
         foldersMap[folder].forEach(v => {
           const opt = document.createElement('option');
           opt.value = v.id;
+          opt.dataset.duration = v.duration || '';
           opt.textContent = `🎬 ${v.name || v.title} (${v.resolution || ''} • ${v.duration || ''})`;
           grp.appendChild(opt);
         });
@@ -10294,6 +10387,7 @@ async function loadRecreateSlotVideos(selectedVideoId) {
         rootVideos.forEach(v => {
           const opt = document.createElement('option');
           opt.value = v.id;
+          opt.dataset.duration = v.duration || '';
           opt.textContent = `🎬 ${v.name || v.title} (${v.resolution || ''} • ${v.duration || ''})`;
           rGrp.appendChild(opt);
         });
@@ -10301,23 +10395,68 @@ async function loadRecreateSlotVideos(selectedVideoId) {
       }
     }
 
-    if (selectedVideoId) {
-      select.value = String(selectedVideoId);
+    if (selectedVideoId !== undefined && selectedVideoId !== null && selectedVideoId !== '') {
+      let foundMatch = false;
+      for (let i = 0; i < select.options.length; i++) {
+        if (String(select.options[i].value) === String(selectedVideoId)) {
+          select.selectedIndex = i;
+          foundMatch = true;
+          break;
+        }
+      }
+      if (!foundMatch && selectedVideoId) {
+        const fbOpt = document.createElement('option');
+        fbOpt.value = selectedVideoId;
+        fbOpt.textContent = `🎬 Video #${selectedVideoId}`;
+        fbOpt.selected = true;
+        select.appendChild(fbOpt);
+      }
+    } else {
+      select.value = '';
     }
   } catch (err) {
     console.error('Error loading videos for recreate slot:', err);
   }
 }
+window.loadRecreateSlotVideos = loadRecreateSlotVideos;
 
 async function loadRecreateSlotAudios(selectedAudioId) {
   const select = document.getElementById('recreateSlotEditAudioSelect');
   if (!select) return;
 
   try {
-    if (!window.allStudioAudios) {
-      const res = await fetch('/api/stream/audios');
-      const audios = await res.json();
-      window.allStudioAudios = audios;
+    if (!Array.isArray(window.allStudioAudios) || window.allStudioAudios.length === 0) {
+      select.innerHTML = '<option value="">-- Memuat audio... --</option>';
+      try {
+        const res = await fetch('/api/stream/audios', {
+          headers: { 'X-CSRF-Token': getCsrfToken() }
+        });
+        const audios = await res.json();
+        window.allStudioAudios = Array.isArray(audios) ? audios : [];
+      } catch (err) {
+        console.error('Error fetching audios:', err);
+      }
+    }
+
+    // Fallback: If still empty, try /api/audios
+    if (!Array.isArray(window.allStudioAudios) || window.allStudioAudios.length === 0) {
+      try {
+        const resA = await fetch('/api/audios', {
+          headers: { 'X-CSRF-Token': getCsrfToken() }
+        });
+        const dataA = await resA.json();
+        if (dataA && Array.isArray(dataA.audios)) {
+          window.allStudioAudios = dataA.audios.map(a => ({
+            id: a.id,
+            title: a.title || a.name || a.filename,
+            name: a.title || a.name || a.filename,
+            format: a.format || 'audio',
+            folder_name: a.folder_name || null
+          }));
+        }
+      } catch (err) {
+        console.warn('Failed fallback to /api/audios:', err);
+      }
     }
 
     select.innerHTML = '<option value="">Audio Asli dari Video (Default)</option>';
@@ -10361,13 +10500,30 @@ async function loadRecreateSlotAudios(selectedAudioId) {
       }
     }
 
-    if (selectedAudioId) {
-      select.value = String(selectedAudioId);
+    if (selectedAudioId !== undefined && selectedAudioId !== null && selectedAudioId !== '') {
+      let foundMatch = false;
+      for (let i = 0; i < select.options.length; i++) {
+        if (String(select.options[i].value) === String(selectedAudioId)) {
+          select.selectedIndex = i;
+          foundMatch = true;
+          break;
+        }
+      }
+      if (!foundMatch && selectedAudioId) {
+        const fbOpt = document.createElement('option');
+        fbOpt.value = selectedAudioId;
+        fbOpt.textContent = `🎵 Audio #${selectedAudioId}`;
+        fbOpt.selected = true;
+        select.appendChild(fbOpt);
+      }
+    } else {
+      select.value = '';
     }
   } catch (err) {
     console.error('Error loading audios for recreate slot:', err);
   }
 }
+window.loadRecreateSlotAudios = loadRecreateSlotAudios;
 
 function saveRecreateSlotFullEdit() {
   const idxStr = document.getElementById('recreateSlotEditGroupIndex')?.value;
@@ -10451,6 +10607,9 @@ function saveRecreateSlotFullEdit() {
       group.videoId = vVal;
       const vOpt = videoSelect.options[videoSelect.selectedIndex];
       group.videoName = vOpt ? vOpt.text.replace(/^[🎬📋\s]+/, '') : `Video #${vVal}`;
+    } else {
+      group.videoId = null;
+      group.videoName = null;
     }
   }
 
@@ -10479,7 +10638,7 @@ function saveRecreateSlotFullEdit() {
   if (totalM === 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
     const matchedV = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
     if (matchedV && matchedV.duration) {
-      const vSecs = Math.round(Number(matchedV.duration));
+      const vSecs = parseStudioMediaDuration(matchedV.duration);
       if (vSecs > 0) {
         totalM = Math.max(1, Math.round(vSecs / 60));
         h = Math.floor(totalM / 60);
@@ -10749,42 +10908,76 @@ async function handleRecreateSaveRecurringOnly() {
     }
 
     // 2. Also update template broadcast slots if any slot settings were modified in the modal
-    if (groups.length > 0 && template.isMultiBroadcast) {
-      const updatedBroadcasts = groups.map((grp) => ({
-        title: grp.title || template.title,
-        originalTitle: grp.originalTitle || template.title,
-        description: grp.description || '',
-        titleFolderId: grp.titleFolderId !== undefined ? grp.titleFolderId : (template.title_folder_id || null),
-        streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
-        streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
-        thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
-        pinnedThumbnail: grp.pinnedThumbnail || null,
-        durationHours: grp.durationHours !== undefined ? grp.durationHours : 0,
-        durationMinutes: grp.durationMinutes !== undefined ? grp.durationMinutes : 0,
-        streamDurationMinutes: grp.streamDurationMinutes || (((grp.durationHours || 0) * 60) + (grp.durationMinutes || 0)),
-        loopVideo: grp.loopVideo !== false,
-        videoId: grp.videoId || template.video_id || null,
-        audioId: grp.audioId || template.audio_id || null,
-        privacyStatus: grp.privacyStatus || template.privacy_status || 'unlisted'
-      }));
+    if (groups.length > 0) {
+      if (template.isMultiBroadcast) {
+        const updatedBroadcasts = groups.map((grp) => ({
+          title: grp.title || template.title,
+          originalTitle: grp.originalTitle || template.title,
+          description: grp.description || '',
+          titleFolderId: grp.titleFolderId !== undefined ? grp.titleFolderId : (template.title_folder_id || null),
+          streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
+          streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
+          thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
+          pinnedThumbnail: grp.pinnedThumbnail || null,
+          durationHours: grp.durationHours !== undefined ? grp.durationHours : 0,
+          durationMinutes: grp.durationMinutes !== undefined ? grp.durationMinutes : 0,
+          streamDurationMinutes: grp.streamDurationMinutes || (((grp.durationHours || 0) * 60) + (grp.durationMinutes || 0)),
+          loopVideo: grp.loopVideo !== false,
+          videoId: grp.videoId || template.video_id || null,
+          videoName: grp.videoName || null,
+          audioId: grp.audioId || template.audio_id || null,
+          audioName: grp.audioName || null,
+          privacyStatus: grp.privacyStatus || template.privacy_status || 'unlisted'
+        }));
 
-      try {
-        const updateBody = {
-          description: JSON.stringify(updatedBroadcasts)
-        };
-        if (window.recreateFinalNextIndex !== undefined && window.recreateFinalNextIndex !== null) {
-          updateBody.titleIndex = window.recreateFinalNextIndex;
+        try {
+          const updateBody = {
+            description: JSON.stringify(updatedBroadcasts)
+          };
+          if (window.recreateFinalNextIndex !== undefined && window.recreateFinalNextIndex !== null) {
+            updateBody.titleIndex = window.recreateFinalNextIndex;
+          }
+          await fetch(`/api/youtube/templates/${template.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify(updateBody)
+          });
+        } catch (slotUpdateErr) {
+          console.warn('[recreate] Non-fatal error updating slot description:', slotUpdateErr);
         }
-        await fetch(`/api/youtube/templates/${template.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': getCsrfToken()
-          },
-          body: JSON.stringify(updateBody)
-        });
-      } catch (slotUpdateErr) {
-        console.warn('[recreate] Non-fatal error updating slot description:', slotUpdateErr);
+      } else {
+        const grp = groups[0];
+        try {
+          const updateBody = {
+            title: grp.title || template.title,
+            video_id: grp.videoId !== undefined ? grp.videoId : template.video_id,
+            audio_id: grp.audioId !== undefined ? grp.audioId : template.audio_id,
+            stream_id: grp.streamId !== undefined ? grp.streamId : template.stream_id,
+            stream_key: grp.streamKey !== undefined ? grp.streamKey : template.stream_key,
+            thumbnail_folder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
+            pinned_thumbnail: grp.pinnedThumbnail || null,
+            duration_hours: grp.durationHours !== undefined ? grp.durationHours : template.duration_hours,
+            duration_minutes: grp.durationMinutes !== undefined ? grp.durationMinutes : template.duration_minutes,
+            stream_duration_minutes: grp.streamDurationMinutes || (((grp.durationHours || 0) * 60) + (grp.durationMinutes || 0)),
+            loop_video: grp.loopVideo !== false
+          };
+          if (window.recreateFinalNextIndex !== undefined && window.recreateFinalNextIndex !== null) {
+            updateBody.titleIndex = window.recreateFinalNextIndex;
+          }
+          await fetch(`/api/youtube/templates/${template.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify(updateBody)
+          });
+        } catch (singleUpdateErr) {
+          console.warn('[recreate] Non-fatal error updating single template:', singleUpdateErr);
+        }
       }
     } else if (template.id && window.recreateFinalNextIndex !== undefined && window.recreateFinalNextIndex !== null) {
       try {
