@@ -419,10 +419,10 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
         rtmp_url: stream.rtmp_url
       }).catch(() => {});
 
-      // Safe upload thumbnail helper
+      // Safe upload thumbnail helper (with 25-second timeout and internal retry in youtubeService)
       const safeUploadThumb = (buf) => Promise.race([
         youtubeService.uploadThumbnail(accessToken, created.broadcastId, buf),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timeout')), 8000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timeout after 25s')), 25000))
       ]);
 
       let finalThumbPath = savedSettings?.thumbnail_path || null;
@@ -434,6 +434,7 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
       try {
         const thumbFolder = savedSettings?.thumbnail_folder;
         const pinnedThumb = savedSettings?.pinned_thumbnail || savedSettings?.pinnedThumbnail || null;
+        const specificThumb = savedSettings?.thumbnail_path || null;
         let uploaded = false;
 
         // Priority 1: Use pinned thumbnail if explicitly set!
@@ -452,7 +453,46 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
           }
         }
 
-        // Priority 2: Sequential rotation if thumbnail_folder configured (ONLY if not pinned)
+        // Priority 2: Use user-selected thumbnail if explicitly chosen (overrides automatic folder rotation)
+        if (!uploaded && specificThumb) {
+          const absPath = path.isAbsolute(specificThumb)
+            ? specificThumb
+            : path.join(__dirname, '..', 'public', specificThumb.replace(/^\//, ''));
+          if (fs.existsSync(absPath)) {
+            const buf = fs.readFileSync(absPath);
+            await safeUploadThumb(buf);
+            console.log(`[StreamingService] ✅ Uploaded user-selected thumbnail for fresh broadcast ${created.broadcastId}: ${specificThumb}`);
+            uploaded = true;
+            finalThumbPath = specificThumb;
+
+            // Advance GLOBAL stream_key_folder_mapping so future rotations smoothly continue after this thumbnail
+            try {
+              const currentFolder = String(thumbFolder !== undefined && thumbFolder !== null ? thumbFolder : '').trim();
+              const globalStreamKeyId = '__GLOBAL__' + currentFolder;
+              const nextIndex = finalThumbIndex + 1;
+              const db = require('../db/database').getDb();
+              await new Promise((resolve) => {
+                db.run(
+                  `INSERT INTO stream_key_folder_mapping (user_id, stream_key_id, folder_name, thumbnail_index, updated_at)
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(user_id, stream_key_id) DO UPDATE SET
+                     thumbnail_index = excluded.thumbnail_index,
+                     folder_name = excluded.folder_name,
+                     updated_at = CURRENT_TIMESTAMP`,
+                  [stream.user_id, globalStreamKeyId, currentFolder, nextIndex],
+                  () => resolve()
+                );
+              });
+              console.log(`[StreamingService] Advanced global rotation index to ${nextIndex} after user-selected thumbnail`);
+            } catch (idxErr) {
+              console.warn('[StreamingService] Warning advancing global rotation index:', idxErr.message);
+            }
+          } else {
+            console.warn(`[StreamingService] ⚠️ User-selected thumbnail not found on disk: ${absPath}`);
+          }
+        }
+
+        // Priority 3: Sequential rotation from folder ONLY IF no pinned and no user-selected thumbnail
         if (!uploaded && thumbFolder !== undefined && thumbFolder !== null) {
           const scheduleService = require('./scheduleService');
           const currentFolder = String(thumbFolder).trim();
@@ -509,19 +549,6 @@ async function ensureFreshYouTubeBroadcastForStream(stream) {
                 } catch (_) {}
               }
             }
-          }
-        }
-
-        // Priority 3: Fallback to specific thumbnail_path if no pinned thumbnail and no folder rotation
-        if (!uploaded && savedSettings?.thumbnail_path) {
-          const absPath = path.isAbsolute(savedSettings.thumbnail_path)
-            ? savedSettings.thumbnail_path
-            : path.join(__dirname, '..', 'public', savedSettings.thumbnail_path.replace(/^\//, ''));
-          if (fs.existsSync(absPath)) {
-            const buf = fs.readFileSync(absPath);
-            await safeUploadThumb(buf);
-            console.log(`[StreamingService] ✅ Uploaded fallback thumbnail for fresh broadcast ${created.broadcastId}: ${savedSettings.thumbnail_path}`);
-            uploaded = true;
           }
         }
       } catch (thumbErr) {

@@ -1919,7 +1919,8 @@ class ScheduleService {
       
       // Priority 3: Fallback to specific thumbnail_path if no folder or selection failed
       if (!fullPath && thumbnailPath) {
-        fullPath = path.join(__dirname, '..', 'public', thumbnailPath);
+        const normalizedPath = thumbnailPath.replace(/^\//, '');
+        fullPath = path.isAbsolute(thumbnailPath) ? thumbnailPath : path.join(__dirname, '..', 'public', normalizedPath);
       }
       
       if (!fullPath || !fs.existsSync(fullPath)) {

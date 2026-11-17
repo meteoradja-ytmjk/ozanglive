@@ -1946,39 +1946,67 @@ class YouTubeService {
    * @returns {Promise<{thumbnailUrl: string}>}
    */
   async uploadThumbnail(accessToken, broadcastId, imageBuffer, mimeType = 'image/jpeg') {
-    try {
-      const oauth2Client = new google.auth.OAuth2();
-      oauth2Client.setCredentials({ access_token: accessToken });
-      
-      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-      
-      console.log(`[YouTubeService.uploadThumbnail] Uploading thumbnail for broadcast ${broadcastId}, size: ${imageBuffer.length} bytes, type: ${mimeType}`);
-      
-      // Validate buffer
-      if (!imageBuffer || imageBuffer.length === 0) {
-        throw new Error('Image buffer is empty');
-      }
-      
-      const response = await youtube.thumbnails.set({
-        videoId: broadcastId,
-        media: {
-          mimeType: mimeType,
-          body: require('stream').Readable.from(imageBuffer)
-        }
-      });
-      
-      console.log('[YouTubeService.uploadThumbnail] Response:', JSON.stringify(response.data, null, 2));
-      
-      return {
-        thumbnailUrl: response.data.items?.[0]?.default?.url || response.data.items?.[0]?.medium?.url || ''
-      };
-    } catch (error) {
-      console.error('[YouTubeService.uploadThumbnail] Error:', error.message);
-      if (error.response) {
-        console.error('[YouTubeService.uploadThumbnail] Response error:', JSON.stringify(error.response.data, null, 2));
-      }
-      throw error;
+    // Validate buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Image buffer is empty');
     }
+
+    // Auto-detect MIME type from buffer magic bytes to prevent YouTube API mediaBodyTypeInvalid rejection
+    let detectedMime = mimeType || 'image/jpeg';
+    if (imageBuffer.length >= 8) {
+      if (imageBuffer[0] === 0xFF && imageBuffer[1] === 0xD8 && imageBuffer[2] === 0xFF) {
+        detectedMime = 'image/jpeg';
+      } else if (imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50 && imageBuffer[2] === 0x4E && imageBuffer[3] === 0x47) {
+        detectedMime = 'image/png';
+      }
+    }
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+    const maxAttempts = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`[YouTubeService.uploadThumbnail] Uploading thumbnail for broadcast ${broadcastId} (attempt ${attempt}/${maxAttempts}), size: ${imageBuffer.length} bytes, type: ${detectedMime}`);
+
+        const response = await youtube.thumbnails.set({
+          videoId: broadcastId,
+          media: {
+            mimeType: detectedMime,
+            body: require('stream').Readable.from(imageBuffer)
+          }
+        });
+
+        console.log(`[YouTubeService.uploadThumbnail] ✅ Upload successful on attempt ${attempt}:`, response.data?.items?.[0]?.default?.url || 'ok');
+
+        return {
+          thumbnailUrl: response.data.items?.[0]?.default?.url || response.data.items?.[0]?.medium?.url || ''
+        };
+      } catch (error) {
+        lastError = error;
+        const status = error.response ? error.response.status : error.status;
+        const isTransient = status === 404 || status === 409 || status === 500 || status === 502 || status === 503 || status === 504 || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT';
+
+        console.warn(`[YouTubeService.uploadThumbnail] ⚠️ Attempt ${attempt}/${maxAttempts} failed: ${error.message} (status: ${status || 'unknown'})`);
+        if (error.response?.data) {
+          console.warn('[YouTubeService.uploadThumbnail] Response error data:', JSON.stringify(error.response.data));
+        }
+
+        if (attempt < maxAttempts && isTransient) {
+          const delayMs = attempt * 1500;
+          console.log(`[YouTubeService.uploadThumbnail] Video ID ${broadcastId} not ready yet, retrying thumbnail upload in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        } else {
+          break;
+        }
+      }
+    }
+
+    console.error('[YouTubeService.uploadThumbnail] All thumbnail upload attempts failed for broadcast:', broadcastId, lastError?.message);
+    throw lastError;
   }
 
   /**

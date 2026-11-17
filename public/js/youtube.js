@@ -3132,12 +3132,17 @@ function selectGalleryThumbnail(element, url, path) {
   
   // Update preview
   const preview = document.getElementById('thumbnailPreview');
-  preview.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
-  preview.classList.add('border-primary');
-  preview.classList.remove('border-gray-600');
+  if (preview) {
+    preview.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+    preview.classList.add('border-primary');
+    preview.classList.remove('border-gray-600');
+  }
   
-  // Set hidden input for path
-  document.getElementById('selectedThumbnailPath').value = path;
+  // Set hidden inputs for path and custom thumbnail flag
+  const selInput = document.getElementById('selectedThumbnailPath');
+  if (selInput) selInput.value = path;
+  const customInput = document.getElementById('isCustomThumbnail');
+  if (customInput) customInput.value = 'true';
 }
 
 // Helper to validate thumbnail image format (MIME or file extension fallback)
@@ -3931,6 +3936,14 @@ function openCreateBroadcastModal(options = {}) {
     currentTags = [];
     if (typeof renderTags === 'function') renderTags();
     hideAutoFillIndicators();
+    const selThumb = document.getElementById('selectedThumbnailPath');
+    if (selThumb) selThumb.value = '';
+    const isCustomInput = document.getElementById('isCustomThumbnail');
+    if (isCustomInput) isCustomInput.value = 'false';
+    const pinnedInput = document.getElementById('pinnedThumbnail');
+    if (pinnedInput) pinnedInput.value = '';
+    window.createSelectedThumbnailIndex = null;
+    window.createSelectedThumbnailPath = null;
   }
 
   // Fetch streams, thumbnails, folders, and channel defaults for selected account
@@ -5509,8 +5522,8 @@ if (createBroadcastForm) {
       
       // Thumbnail
       const thumbnailMode = document.querySelector('input[name="thumbnailMode"]:checked')?.value || 'sequential';
-      const thumbnailPath = document.getElementById('selectedThumbnailPath')?.value;
-      const pinnedThumbnail = document.getElementById('pinnedThumbnail')?.value;
+      const thumbnailPath = (document.getElementById('selectedThumbnailPath')?.value || window.createSelectedThumbnailPath || '').trim();
+      const pinnedThumbnail = (document.getElementById('pinnedThumbnail')?.value || '').trim();
       
       formData.append('thumbnailMode', thumbnailMode);
       if (thumbnailMode === 'pinned' && (pinnedThumbnail || thumbnailPath)) {
@@ -5522,10 +5535,10 @@ if (createBroadcastForm) {
       } else {
         if (thumbnailPath) {
           formData.append('thumbnailPath', thumbnailPath);
+          formData.append('isCustomThumbnail', 'true');
         }
         if (window.createSelectedThumbnailIndex !== null && window.createSelectedThumbnailIndex !== undefined) {
           formData.append('thumbnailIndex', String(window.createSelectedThumbnailIndex));
-          formData.append('isCustomThumbnail', 'true');
         }
         if (pinnedThumbnail) {
           formData.append('pinnedThumbnail', pinnedThumbnail);

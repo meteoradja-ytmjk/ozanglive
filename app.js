@@ -12246,47 +12246,41 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
       thumbnailFolderDefined: thumbnailFolder !== undefined && thumbnailFolder !== null
     });
 
-    // Safe thumbnail upload helper with 7-second timeout to prevent proxy 504 gateway timeouts
+    // Safe thumbnail upload helper with 25-second timeout to accommodate retries & network jitter
     const safeUploadThumbnail = (buffer) => Promise.race([
       youtubeService.uploadThumbnail(accessToken, broadcast.broadcastId, buffer),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timed out after 7s')), 7000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Thumbnail upload timed out after 25s')), 25000))
     ]);
 
     if (req.file) {
       // Handle file upload (highest priority)
       try {
-        if (isStartImmediately) {
-          safeUploadThumbnail(req.file.buffer).then(res => {
-            if (res && res.thumbnailUrl) broadcast.thumbnailUrl = res.thumbnailUrl;
-            console.log('[API] Thumbnail uploaded in background from file upload');
-          }).catch(thumbErr => console.error('[API] Error in background file thumbnail upload:', thumbErr.message));
-        } else {
-          const thumbnailResult = await safeUploadThumbnail(req.file.buffer);
+        const thumbnailResult = await safeUploadThumbnail(req.file.buffer);
+        if (thumbnailResult && thumbnailResult.thumbnailUrl) {
           broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-          console.log('[API] Thumbnail uploaded from file upload');
         }
+        console.log('[API] ✅ Thumbnail uploaded successfully from file upload');
       } catch (thumbErr) {
-        console.error('Error uploading thumbnail:', thumbErr.message);
+        console.error('[API] ⚠️ Error uploading thumbnail from file upload:', thumbErr.message);
       }
-    } else if (thumbnailPath && (thumbnailFolder === undefined || thumbnailFolder === null || req.body.isCustomThumbnail === 'true' || pinnedThumbnailFromRequest || req.body.thumbnailMode === 'pinned')) {
-      // Handle gallery selection or pinned thumbnail
+    } else if (thumbnailPath && thumbnailPath.trim()) {
+      // Handle gallery selection or pinned thumbnail (explicit user selection takes priority over rotation)
       try {
         const isPinnedMode = !!(pinnedThumbnailFromRequest || req.body.thumbnailMode === 'pinned');
-        const chosenPath = (isPinnedMode && pinnedThumbnailFromRequest) ? pinnedThumbnailFromRequest : thumbnailPath;
+        const chosenPath = (isPinnedMode && pinnedThumbnailFromRequest) ? pinnedThumbnailFromRequest : thumbnailPath.trim();
         const normalizedChosen = chosenPath.replace(/^\//, '');
         const fullPath = path.isAbsolute(chosenPath) ? chosenPath : path.join(__dirname, 'public', normalizedChosen);
         console.log(`[API] Using ${isPinnedMode ? 'pinned' : 'user-selected'} thumbnail:`, chosenPath);
         if (fs.existsSync(fullPath)) {
           const imageBuffer = fs.readFileSync(fullPath);
-          if (isStartImmediately) {
-            safeUploadThumbnail(imageBuffer).then(res => {
-              if (res && res.thumbnailUrl) broadcast.thumbnailUrl = res.thumbnailUrl;
-              console.log(`[API] Thumbnail uploaded in background from ${isPinnedMode ? 'pinned' : 'user selection'}:`, chosenPath);
-            }).catch(thumbErr => console.error('[API] Error in background gallery thumbnail upload:', thumbErr.message));
-          } else {
+          try {
             const thumbnailResult = await safeUploadThumbnail(imageBuffer);
-            broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-            console.log(`[API] Thumbnail uploaded from ${isPinnedMode ? 'pinned' : 'user selection'}:`, chosenPath);
+            if (thumbnailResult && thumbnailResult.thumbnailUrl) {
+              broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
+            }
+            console.log(`[API] ✅ Thumbnail uploaded successfully to YouTube from ${isPinnedMode ? 'pinned' : 'user selection'}:`, chosenPath);
+          } catch (thumbErr) {
+            console.error(`[API] ⚠️ Error uploading thumbnail to YouTube from ${isPinnedMode ? 'pinned' : 'user selection'}:`, thumbErr.message);
           }
 
           // Update youtube_broadcast_settings with the selected thumbnail path
@@ -12440,23 +12434,16 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
             const imageBuffer = fs.readFileSync(fullPath);
             console.log('[API] Image buffer size:', imageBuffer.length, 'bytes');
 
-            if (isStartImmediately) {
-              safeUploadThumbnail(imageBuffer).then(thumbnailResult => {
-                if (thumbnailResult && thumbnailResult.thumbnailUrl) broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-                console.log('[API] ✅ Thumbnail uploaded in background to YouTube:', thumbnailResult?.thumbnailUrl);
-              }).catch(uploadErr => {
-                console.error('[API] ❌ Failed to upload background thumbnail to YouTube:', uploadErr.message);
-              });
-            } else {
-              try {
-                const thumbnailResult = await safeUploadThumbnail(imageBuffer);
+            try {
+              const thumbnailResult = await safeUploadThumbnail(imageBuffer);
+              if (thumbnailResult && thumbnailResult.thumbnailUrl) {
                 broadcast.thumbnailUrl = thumbnailResult.thumbnailUrl;
-                console.log('[API] ✅ Thumbnail uploaded successfully to YouTube:', thumbnailResult.thumbnailUrl);
-              } catch (uploadErr) {
-                console.error('[API] ❌ Failed to upload thumbnail to YouTube:', uploadErr.message);
-                if (uploadErr.response) {
-                  console.error('[API] YouTube API error:', JSON.stringify(uploadErr.response.data, null, 2));
-                }
+              }
+              console.log('[API] ✅ Thumbnail uploaded successfully to YouTube (rotation mode):', thumbnailResult?.thumbnailUrl);
+            } catch (uploadErr) {
+              console.error('[API] ❌ Failed to upload thumbnail to YouTube (rotation mode):', uploadErr.message);
+              if (uploadErr.response) {
+                console.error('[API] YouTube API error:', JSON.stringify(uploadErr.response.data, null, 2));
               }
             }
           } else {
@@ -13005,6 +12992,23 @@ app.put('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       );
     } catch (settingsErr) {
       console.warn('[API] Error saving broadcast settings on update:', settingsErr.message);
+    }
+
+    // Upload thumbnail to YouTube if updating an active broadcast on YouTube
+    const targetThumbPath = pinnedThumbnail || thumbnailPath;
+    if (targetThumbPath && credentials && !String(req.params.id).startsWith('scheduled_stream_')) {
+      try {
+        const normalizedThumb = targetThumbPath.replace(/^\//, '');
+        const fullThumbPath = path.isAbsolute(targetThumbPath) ? targetThumbPath : path.join(__dirname, 'public', normalizedThumb);
+        if (fs.existsSync(fullThumbPath)) {
+          const thumbBuffer = fs.readFileSync(fullThumbPath);
+          const thumbAccessToken = await youtubeService.getAccessToken(credentials.clientId, credentials.clientSecret, credentials.refreshToken, 0, credentials.id, 0, credentials.id);
+          await youtubeService.uploadThumbnail(thumbAccessToken, req.params.id, thumbBuffer);
+          console.log(`[API] ✅ Successfully uploaded updated thumbnail to YouTube for broadcast ${req.params.id}: ${targetThumbPath}`);
+        }
+      } catch (thumbUploadErr) {
+        console.warn(`[API] ⚠️ Warning updating thumbnail for broadcast ${req.params.id}:`, thumbUploadErr.message);
+      }
     }
 
     invalidateBroadcastsCache(req.session.userId);
