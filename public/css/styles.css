@@ -151,6 +151,12 @@ body {
   transition-timing-function: linear;
   transition-duration: 200ms;
   cursor: pointer;
+  padding: 0.25rem 0.125rem;
+  box-sizing: border-box;
+}
+
+.sidebar-icon.bg-primary {
+  color: #ffffff;
 }
 
 /* Desktop Logo Styling - POJOK KIRI ATAS, UKURAN PAS */
