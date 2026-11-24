@@ -7909,16 +7909,13 @@ async function openEditTemplateModal(template) {
   const patternRadio = document.querySelector(`input[name="editRecurringPattern"][value="${pattern}"]`);
   if (patternRadio) patternRadio.checked = true;
   
-  // Set single recurring time (clean & simple)
-  const recTimeInput = document.getElementById('editRecurringTime');
-  if (recTimeInput) {
-    let cleanTime = '13:00';
-    if (template.recurring_time) {
-      const match = template.recurring_time.match(/[0-2]?[0-9]:[0-5][0-9]/);
-      if (match) cleanTime = match[0];
-    }
-    recTimeInput.value = cleanTime;
+  // Set multi-time slots for schedule bertingkat
+  window.editRecurringTimesList = [];
+  if (template.recurring_time) {
+    const rawTimes = template.recurring_time.split(/[\s,]+/).filter(Boolean);
+    window.editRecurringTimesList = rawTimes.filter(t => /^[0-2]?[0-9]:[0-5][0-9]$/.test(t));
   }
+  renderEditRecurringTimeChips();
   
   // Reset and set days for weekly
   document.querySelectorAll('input[name="editRecurringDays"]').forEach(cb => cb.checked = false);
@@ -8223,19 +8220,24 @@ if (editTemplateForm) {
       
       if (recurringEnabled) {
         const pattern = document.querySelector('input[name="editRecurringPattern"]:checked')?.value;
-        const timeVal = document.getElementById('editRecurringTime')?.value?.trim();
+        let timesString = '';
+        if (Array.isArray(window.editRecurringTimesList) && window.editRecurringTimesList.length > 0) {
+          timesString = window.editRecurringTimesList.join(', ');
+        } else {
+          timesString = document.getElementById('editRecurringTime')?.value || '';
+        }
         
         if (!pattern) {
           showToast('Pilih pola perulangan (Daily atau Weekly)', 'error');
           return;
         }
-        if (!timeVal) {
-          showToast('Pilih jam tayang untuk jadwal live', 'error');
+        if (!timesString) {
+          showToast('Tambahkan minimal 1 jam untuk jadwal live', 'error');
           return;
         }
         
         updateData.recurringPattern = pattern;
-        updateData.recurringTime = timeVal;
+        updateData.recurringTime = timesString;
         
         if (pattern === 'weekly') {
           const days = Array.from(document.querySelectorAll('input[name="editRecurringDays"]:checked'))
@@ -9302,16 +9304,29 @@ function openRecreateFromTemplateModal(template) {
     // Single broadcast template:
     // IMPORTANT: If recurring is NOT active on template, strictly create ONLY 1 slot!
     // Never auto-expand leftover comma-separated times if user is scheduling once.
-    // Single broadcast template: strictly 1 slot, no jam bertingkat
-    const initialTimeStr = recurringTimes.length > 0 ? recurringTimes[0] : (template.recurring_time ? template.recurring_time.split(/[\s,]+/)[0] : null);
-    const initialSched = parseSlotTime(initialTimeStr, 15);
-    const initialTimeOnly = initialTimeStr || (initialSched && initialSched.includes('T') ? initialSched.split('T')[1].slice(0, 5) : '13:00');
-    const groupTimes = [
-      {
-        scheduleTime: initialSched,
-        timeOnly: initialTimeOnly
-      }
-    ];
+    // Single broadcast template: initialize groupTimes
+    let groupTimes = [];
+    if (template.recurring_enabled && recurringTimes.length > 0) {
+      groupTimes = recurringTimes.map(t => ({
+        scheduleTime: parseSlotTime(t, 15),
+        timeOnly: t
+      })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
+    } else if (recurringTimes.length > 1) {
+      groupTimes = recurringTimes.map((t, idx) => ({
+        scheduleTime: parseSlotTime(t, 15 + idx * 30),
+        timeOnly: t
+      })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
+    } else {
+      const initialTimeStr = recurringTimes.length > 0 ? recurringTimes[0] : (template.recurring_time ? template.recurring_time.split(/[\s,]+/)[0] : null);
+      const initialSched = parseSlotTime(initialTimeStr, 15);
+      const initialTimeOnly = initialTimeStr || (initialSched && initialSched.includes('T') ? initialSched.split('T')[1].slice(0, 5) : '13:00');
+      groupTimes = [
+        {
+          scheduleTime: initialSched,
+          timeOnly: initialTimeOnly
+        }
+      ];
+    }
 
     const singleDesc = extractCleanDescription(template.description, 0);
     const singlePrivacy = template.privacy_status || template.privacyStatus || 'unlisted';
@@ -9733,66 +9748,251 @@ function renderRecreateSlotList() {
         </div>`;
     }
 
-    const firstTime = (group.times && group.times[0]) ? group.times[0] : { scheduleTime: minDateStr, timeOnly: '13:00' };
-    let timeInputHtml = '';
-    if (isRecurring) {
-      let timeVal = firstTime.timeOnly || '13:00';
-      if (!timeVal && firstTime.scheduleTime && firstTime.scheduleTime.includes('T')) {
-        timeVal = firstTime.scheduleTime.split('T')[1].slice(0, 5);
+    // Render scheduled times for this group
+    const groupDurMins = getGroupStreamDurationMinutes(groupIndex);
+    const groupGapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+
+    const timesHtml = (group.times || []).map((t, timeIndex) => {
+      const canDeleteTime = (group.times || []).length > 1;
+      const deleteTimeBtn = canDeleteTime
+        ? `<button type="button" onclick="removeTimeFromGroup(${groupIndex}, ${timeIndex})"
+             class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded border border-gray-600/60 hover:border-red-500/40 transition-colors flex-shrink-0 active:scale-95 cursor-pointer"
+             title="Hapus jam tayang ini">
+             <i class="ti ti-trash text-[11px]"></i>
+           </button>`
+        : '';
+
+      // Calculate start and end ms for this slot
+      let slotStartMs = 0;
+      if (t.scheduleTime) {
+        const p = new Date(t.scheduleTime);
+        if (!isNaN(p.getTime())) slotStartMs = p.getTime();
       }
-      timeInputHtml = `
-        <div class="flex items-center gap-1.5 justify-end flex-shrink-0">
-          <input type="time" id="group_${groupIndex}_time_0" name="groupTime_${groupIndex}[]" required value="${timeVal}"
-            onchange="updateGroupSlotTime(${groupIndex}, 0, this.value, true)"
-            class="h-7.5 w-[100px] sm:w-[115px] px-2 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded-lg text-xs font-semibold text-white text-center focus:outline-none [color-scheme:dark] transition-colors shadow-2xs">
-        </div>
-      `;
-    } else {
-      const compactDt = formatShortDateTimeDisplay(firstTime.scheduleTime);
-      timeInputHtml = `
-        <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-          <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7.5 px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-2xs select-none"
-               onclick="openRecreateDateTimePicker(this)"
-               title="Klik untuk memilih tanggal dan jam siaran">
-            <i class="ti ti-calendar text-gray-400 text-xs flex-shrink-0 pointer-events-none"></i>
-            <span class="recreate-date-text text-gray-300 font-mono text-xs tracking-tight flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.dateStr}</span>
-            <span class="text-gray-400 font-bold text-xs flex-shrink-0 pointer-events-none leading-none">.</span>
-            <span class="recreate-time-text text-primary font-mono text-xs sm:text-sm font-bold tracking-wider flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.timeStr}</span>
-            <i class="ti ti-clock text-primary/70 text-xs ml-0.5 flex-shrink-0 pointer-events-none"></i>
+      if (!slotStartMs && t.timeOnly) {
+        const sched = calculateUpcomingDateTimeForSlot(t.timeOnly, isRecurring ? 'daily' : 'none');
+        const p = new Date(sched);
+        if (!isNaN(p.getTime())) slotStartMs = p.getTime();
+      }
 
-            <input type="datetime-local" id="group_${groupIndex}_datetime_0" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${firstTime.scheduleTime || ''}"
-              onchange="handleRecreateDateTimeChange(${groupIndex}, 0, this)"
-              oninput="handleRecreateDateTimeChange(${groupIndex}, 0, this)"
-              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
+      let gapBadgeHtml = '';
+      let estRangeStr = '';
+      if (slotStartMs > 0) {
+        const slotEndMs = slotStartMs + groupDurMins * 60 * 1000;
+        const startFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(slotStartMs)));
+        const endFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(slotEndMs)));
+        estRangeStr = `${startFormatted.timeStr} - ${endFormatted.timeStr}`;
+
+        if (timeIndex === 0) {
+          gapBadgeHtml = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-primary/90 bg-primary/10 border border-primary/20 whitespace-nowrap"><i class="ti ti-player-play text-[9px]"></i> Mulai</span>`;
+        } else if (timeIndex > 0 && group.times[timeIndex - 1]) {
+          const prevT = group.times[timeIndex - 1];
+          let prevStartMs = 0;
+          if (prevT.scheduleTime) {
+            const p = new Date(prevT.scheduleTime);
+            if (!isNaN(p.getTime())) prevStartMs = p.getTime();
+          }
+          if (!prevStartMs && prevT.timeOnly) {
+            const sched = calculateUpcomingDateTimeForSlot(prevT.timeOnly, isRecurring ? 'daily' : 'none');
+            const p = new Date(sched);
+            if (!isNaN(p.getTime())) prevStartMs = p.getTime();
+          }
+
+          if (prevStartMs > 0) {
+            const prevEndMs = prevStartMs + groupDurMins * 60 * 1000;
+            const diffMs = slotStartMs - prevEndMs;
+            const diffMins = Math.round(diffMs / 60000);
+
+            if (diffMs < 0) {
+              const overlapMins = Math.abs(diffMins);
+              const prevEndFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(prevEndMs)));
+              gapBadgeHtml = `
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/40 animate-pulse whitespace-nowrap"
+                      title="Siaran ini tabrakan ${overlapMins} menit! Siaran #${timeIndex} baru selesai jam ${prevEndFormatted.timeStr}">
+                  <i class="ti ti-alert-triangle text-xs text-rose-400"></i>
+                  <span>Bentrok (-${overlapMins}m)</span>
+                </span>
+                <button type="button" onclick="autoFixSlotCollision(${groupIndex}, ${timeIndex})"
+                  class="h-6 px-1.5 bg-rose-500/25 hover:bg-rose-500/40 text-rose-300 border border-rose-500/50 rounded text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-2xs cursor-pointer"
+                  title="Sesuaikan jam ini otomatis agar tidak tabrakan (+${groupGapMins}m setelah siaran sebelumnya selesai)">
+                  <i class="ti ti-wand text-[10px]"></i>
+                  <span>Perbaiki</span>
+                </button>
+              `;
+            } else {
+              const gHour = Math.floor(diffMins / 60);
+              const gRemMin = diffMins % 60;
+              const gapText = gHour > 0 ? (gRemMin > 0 ? `${gHour}j ${gRemMin}m` : `${gHour} jam`) : `${diffMins}m`;
+              gapBadgeHtml = `
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 whitespace-nowrap"
+                      title="Jeda aman ${gapText} setelah Siaran #${timeIndex} selesai">
+                  <i class="ti ti-check text-[10px]"></i>
+                  <span>Jeda ${gapText}</span>
+                </span>
+              `;
+            }
+          }
+        }
+      }
+
+      let timeInputHtml = '';
+      if (isRecurring) {
+        let timeVal = t.timeOnly || '13:00';
+        if (!timeVal && t.scheduleTime && t.scheduleTime.includes('T')) {
+          timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
+        }
+        timeInputHtml = `
+          <div class="flex items-center gap-1.5 justify-end flex-shrink-0">
+            <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeVal}"
+              onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
+              class="h-7.5 w-[95px] sm:w-[110px] px-1.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded-lg text-xs font-semibold text-white text-center focus:outline-none [color-scheme:dark] transition-colors shadow-2xs">
+            ${deleteTimeBtn}
           </div>
+        `;
+      } else {
+        const compactDt = formatShortDateTimeDisplay(t.scheduleTime);
+        timeInputHtml = `
+          <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+            <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7.5 px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-2xs select-none"
+                 onclick="openRecreateDateTimePicker(this)"
+                 title="Klik untuk memilih tanggal dan jam siaran">
+              <i class="ti ti-calendar text-gray-400 text-xs flex-shrink-0 pointer-events-none"></i>
+              <!-- Tanggal singkat: 12/9/26 -->
+              <span class="recreate-date-text text-gray-300 font-mono text-xs tracking-tight flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.dateStr}</span>
+              <!-- Titik pemisah -->
+              <span class="text-gray-400 font-bold text-xs flex-shrink-0 pointer-events-none leading-none">.</span>
+              <!-- Jam jelas menonjol: 09.00 -->
+              <span class="recreate-time-text text-primary font-mono text-xs sm:text-sm font-bold tracking-wider flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.timeStr}</span>
+              <i class="ti ti-clock text-primary/70 text-xs ml-0.5 flex-shrink-0 pointer-events-none"></i>
+
+              <!-- Native input overlay for picking & form submission -->
+              <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
+                onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
+                oninput="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
+            </div>
+            ${deleteTimeBtn}
+          </div>
+        `;
+      }
+
+      const badgeHtml = isRecurring
+        ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-medium flex items-center gap-1 whitespace-nowrap">
+             <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
+           </span>`
+        : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-medium whitespace-nowrap">
+             Sekali
+           </span>`;
+
+      return `
+        <div class="flex items-center justify-between gap-1.5 sm:gap-2 bg-dark-700/60 px-2 sm:px-2.5 py-1.5 rounded-lg border border-gray-600/40 flex-wrap sm:flex-nowrap w-full">
+          <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-wrap">
+            <span class="text-[11px] font-bold text-gray-200">Jam ${timeIndex + 1}:</span>
+            ${badgeHtml}
+            ${gapBadgeHtml}
+            ${estRangeStr ? `<span class="text-[10px] text-gray-400 font-mono hidden md:inline" title="Estimasi waktu tayang">(${estRangeStr})</span>` : ''}
+          </div>
+          ${timeInputHtml}
         </div>
       `;
-    }
+    }).join('');
 
-    const badgeHtml = isRecurring
-      ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-medium flex items-center gap-1 whitespace-nowrap">
-           <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
-         </span>`
-      : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-medium whitespace-nowrap">
-           Sekali
-         </span>`;
-
-    globalSlotOffset += 1;
+    globalSlotOffset += (group.times || []).length;
 
     return `
       <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm overflow-hidden">
         <!-- Baris 1 & 2: Header Siaran & Tombol Aksi -->
         ${titleContentHtml}
 
-        <!-- Single Jam Tayang Bar (Bersih, Rapi & Ramping Tanpa Overflow) -->
-        <div class="bg-dark-800/70 rounded-lg px-3 py-2 border border-gray-700/60 flex items-center justify-between gap-2 w-full min-w-0">
-          <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-shrink-0">
-            <i class="ti ti-clock text-primary text-xs flex-shrink-0"></i>
-            <span class="font-medium text-gray-200">Jam Tayang:</span>
-            ${badgeHtml}
+        <!-- Baris Sub-kontainer Jam Tayang Bertingkat Khusus Siaran Ini -->
+        <div class="bg-dark-800/70 rounded-lg p-2.5 sm:p-3 border border-gray-700/60 space-y-2.5">
+          <div class="flex items-center justify-between text-xs text-gray-400 px-0.5 flex-nowrap w-full">
+            <span class="flex items-center gap-1 font-medium text-gray-300 truncate">
+              <i class="ti ti-clock text-primary text-xs flex-shrink-0"></i>
+              <span class="truncate">Jam Tayang Siaran #${groupIndex + 1}:</span>
+            </span>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <span class="text-[10px] text-gray-400 font-mono flex-shrink-0 whitespace-nowrap">${(group.times || []).length} jadwal</span>
+              <button type="button" onclick="addCustomTimeToGroup(${groupIndex})"
+                class="h-6 px-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer"
+                title="Tambah 1 jadwal baru (dihitung otomatis dari durasi + jeda)">
+                <i class="ti ti-plus text-[10px]"></i>
+                <span>Tambah Jam</span>
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-1.5 min-w-0 flex-shrink-0">
-            ${timeInputHtml}
+
+          <!-- List Waktu Slot -->
+          <div class="space-y-1.5">
+            ${timesHtml}
+          </div>
+
+          <!-- Smart Interval Generator: Fleksibel & Anti-Tabrakan -->
+          <div class="pt-2.5 border-t border-gray-700/50 space-y-2.5 w-full">
+            <div class="flex items-center justify-between gap-2 text-xs flex-wrap">
+              <div class="flex items-center gap-1.5 text-gray-200">
+                <i class="ti ti-bolt text-amber-400 text-xs"></i>
+                <span class="text-[11px] font-semibold text-white">Jadwal Cerdas Otomatis:</span>
+                <span class="text-[10px] text-gray-400 font-mono">(Durasi: <strong class="text-white">${durStr}</strong>)</span>
+              </div>
+
+              <!-- Pilihan Jeda Menit & Tombol Rapikan Jeda -->
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <label for="groupGap_${groupIndex}" class="text-[11px] text-gray-400 whitespace-nowrap">Jeda:</label>
+                <select id="groupGap_${groupIndex}" onchange="updateGroupGapMinutes(${groupIndex}, this.value)"
+                  class="h-6.5 px-2 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded text-[11px] font-medium text-white focus:outline-none transition-colors [color-scheme:dark] cursor-pointer">
+                  <option value="5" ${(group.selectedGapMinutes === 5) ? 'selected' : ''}>5 Menit</option>
+                  <option value="10" ${(group.selectedGapMinutes === 10) ? 'selected' : ''}>10 Menit</option>
+                  <option value="15" ${(group.selectedGapMinutes === undefined || group.selectedGapMinutes === 15) ? 'selected' : ''}>15 Menit (Ideal)</option>
+                  <option value="30" ${(group.selectedGapMinutes === 30) ? 'selected' : ''}>30 Menit</option>
+                  <option value="60" ${(group.selectedGapMinutes === 60) ? 'selected' : ''}>60 Menit</option>
+                </select>
+
+                <button type="button" onclick="autoAlignAllGroupTimes(${groupIndex})"
+                  class="h-6.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded text-[11px] font-medium transition-all flex items-center gap-1 active:scale-95 shadow-2xs cursor-pointer"
+                  title="Hitung dan rapikan semua jeda siaran otomatis agar 100% anti-tabrakan">
+                  <i class="ti ti-wand text-xs"></i>
+                  <span>Rapikan Jeda</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tombol Pilihan Cepat Frekuensi Tayang & Custom -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full">
+              <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 2)"
+                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 2) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 2x sehari sesuai durasi siaran + jeda">
+                <i class="ti ti-repeat text-[11px]"></i>
+                <span>Tayang 2x</span>
+              </button>
+
+              <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 3)"
+                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 3) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 3x sehari sesuai durasi siaran + jeda">
+                <i class="ti ti-repeat text-[11px]"></i>
+                <span>Tayang 3x</span>
+              </button>
+
+              <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 4)"
+                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 4) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 4x sehari sesuai durasi siaran + jeda">
+                <i class="ti ti-repeat text-[11px]"></i>
+                <span>Tayang 4x</span>
+              </button>
+
+              <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 5)"
+                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 5) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 5x sehari sesuai durasi siaran + jeda">
+                <i class="ti ti-repeat text-[11px]"></i>
+                <span>Tayang 5x</span>
+              </button>
+
+              <button type="button" onclick="promptCustomChainedTimes(${groupIndex})"
+                class="h-7.5 px-1.5 bg-dark-600 hover:bg-blue-500/20 text-gray-200 hover:text-blue-400 hover:border-blue-500/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer col-span-2 sm:col-span-1"
+                title="Tentukan jumlah frekuensi tayang bebas (misal 6x, 7x, atau 8x)">
+                <i class="ti ti-adjustments text-[11px]"></i>
+                <span>Custom (${(group.times || []).length}x)</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -9800,14 +10000,346 @@ function renderRecreateSlotList() {
   }).join('');
 }
 
-// Stubs for deprecated jam bertingkat helpers
-function addQuickTimeToGroup() {}
-window.addQuickTimeToGroup = addQuickTimeToGroup;
+// Helper to get total stream duration in minutes for a group
+function getGroupStreamDurationMinutes(groupIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return 60;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  
+  let durH = parseInt(group.durationHours, 10) || 0;
+  let durM = parseInt(group.durationMinutes, 10) || 0;
+  let durTotal = group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((durH * 60) + durM);
 
-function addCustomTimeToGroup() {}
+  if (durTotal <= 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
+    const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
+    if (matchedVid && matchedVid.duration) {
+      const vSecs = parseStudioMediaDuration(matchedVid.duration);
+      if (vSecs > 0) {
+        durTotal = Math.max(1, Math.round(vSecs / 60));
+      }
+    }
+  }
+
+  if (durTotal <= 0 && window.currentRecreateTemplate) {
+    const t = window.currentRecreateTemplate;
+    durTotal = parseInt(t.stream_duration_minutes, 10) || (((parseInt(t.duration_hours, 10) || 0) * 60) + (parseInt(t.duration_minutes, 10) || 0)) || 0;
+    if (durTotal <= 0 && t.video_id && Array.isArray(window.allStudioVideos)) {
+      const matchedVid = window.allStudioVideos.find(v => String(v.id) === String(t.video_id));
+      if (matchedVid && matchedVid.duration) {
+        const vSecs = parseStudioMediaDuration(matchedVid.duration);
+        if (vSecs > 0) {
+          durTotal = Math.max(1, Math.round(vSecs / 60));
+        }
+      }
+    }
+  }
+
+  return durTotal > 0 ? durTotal : 60;
+}
+window.getGroupStreamDurationMinutes = getGroupStreamDurationMinutes;
+
+// Update selected gap minutes for group
+function updateGroupGapMinutes(groupIndex, gapValue) {
+  if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
+    const gap = parseInt(gapValue, 10) || 15;
+    window.recreateBroadcastGroups[groupIndex].selectedGapMinutes = gap;
+    const currentCount = (window.recreateBroadcastGroups[groupIndex].times || []).length;
+    if (currentCount > 1) {
+      generateSmartChainedTimes(groupIndex, currentCount);
+    }
+  }
+}
+window.updateGroupGapMinutes = updateGroupGapMinutes;
+
+// Generate smart chained times based on duration and gap
+function generateSmartChainedTimes(groupIndex, count = 3) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  const targetCount = Math.max(1, Math.min(10, Number(count) || 3));
+
+  const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+  const stepMinutes = durMins + gapMins;
+
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const patternVal = patternInput ? patternInput.value : 'none';
+  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
+
+  let selectedWeeklyDays = [];
+  if (patternVal === 'weekly') {
+    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+  }
+
+  // Preserve starting time from first slot if available
+  let baseDate;
+  if (group.times && group.times.length > 0 && group.times[0]) {
+    const firstT = group.times[0];
+    if (firstT.scheduleTime) {
+      const p = new Date(firstT.scheduleTime);
+      if (!isNaN(p.getTime())) baseDate = p;
+    }
+    if (!baseDate && firstT.timeOnly) {
+      const sched = calculateUpcomingDateTimeForSlot(firstT.timeOnly, patternVal, selectedWeeklyDays);
+      const p = new Date(sched);
+      if (!isNaN(p.getTime())) baseDate = p;
+    }
+  }
+
+  if (!baseDate || isNaN(baseDate.getTime()) || baseDate.getTime() < Date.now() + 10 * 60 * 1000) {
+    baseDate = new Date(Date.now() + 15 * 60 * 1000);
+  }
+
+  const newTimes = [];
+  let curDate = new Date(baseDate.getTime());
+
+  for (let i = 0; i < targetCount; i++) {
+    const dtStr = formatLocalDateTime(curDate);
+    const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
+
+    if (isRecurring) {
+      const schedTime = calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays);
+      newTimes.push({
+        scheduleTime: schedTime,
+        timeOnly: timeOnlyStr
+      });
+    } else {
+      newTimes.push({
+        scheduleTime: dtStr,
+        timeOnly: timeOnlyStr
+      });
+    }
+
+    curDate = new Date(curDate.getTime() + stepMinutes * 60 * 1000);
+  }
+
+  group.times = newTimes;
+
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+  if (typeof loadRecreateTitleRotationPreview === 'function') {
+    loadRecreateTitleRotationPreview();
+  }
+  if (typeof loadRecreateThumbnailRotationPreview === 'function') {
+    loadRecreateThumbnailRotationPreview();
+  }
+
+  const durH = Math.floor(durMins / 60);
+  const durM = durMins % 60;
+  const durLabel = durH > 0 ? (durM > 0 ? `${durH}j ${durM}m` : `${durH} jam`) : `${durM} mnt`;
+  showToast(`Berhasil mengatur tayang ${targetCount}x sehari (Durasi: ${durLabel} + Jeda: ${gapMins}m)`, 'success');
+}
+window.generateSmartChainedTimes = generateSmartChainedTimes;
+
+// Add custom time slot (Smart Chained: Duration + Gap)
+function addCustomTimeToGroup(groupIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!Array.isArray(group.times)) {
+    group.times = [];
+  }
+
+  const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+  const stepMinutes = durMins + gapMins;
+
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const patternVal = patternInput ? patternInput.value : 'none';
+  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
+
+  let selectedWeeklyDays = [];
+  if (patternVal === 'weekly') {
+    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+  }
+
+  let nextDate;
+  if (group.times.length > 0) {
+    const lastT = group.times[group.times.length - 1];
+    if (lastT && lastT.scheduleTime) {
+      const parsed = new Date(lastT.scheduleTime);
+      if (!isNaN(parsed.getTime())) {
+        nextDate = new Date(parsed.getTime() + stepMinutes * 60 * 1000);
+      }
+    }
+  }
+
+  if (!nextDate || isNaN(nextDate.getTime()) || nextDate.getTime() < Date.now() + 10 * 60 * 1000) {
+    nextDate = new Date(Date.now() + stepMinutes * 60 * 1000);
+  }
+
+  const dtStr = formatLocalDateTime(nextDate);
+  const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
+
+  let schedTime = dtStr;
+  if (isRecurring) {
+    schedTime = calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays);
+  }
+
+  group.times.push({
+    scheduleTime: schedTime,
+    timeOnly: timeOnlyStr
+  });
+  group.times.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
+
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+  if (typeof loadRecreateTitleRotationPreview === 'function') {
+    loadRecreateTitleRotationPreview();
+  }
+  if (typeof loadRecreateThumbnailRotationPreview === 'function') {
+    loadRecreateThumbnailRotationPreview();
+  }
+  showToast(`Jadwal jam ${timeOnlyStr} (+${durMins}m siaran + ${gapMins}m jeda) ditambahkan`);
+}
 window.addCustomTimeToGroup = addCustomTimeToGroup;
 
-function removeTimeFromGroup() {}
+// Prompt user for custom frequency count (e.g. 6x, 7x, 8x)
+function promptCustomChainedTimes(groupIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const currentCount = (window.recreateBroadcastGroups[groupIndex].times || []).length || 3;
+  const input = prompt('Masukkan berapa kali siaran ini ingin ditayangkan dalam sehari (misal: 2 - 12):', currentCount);
+  if (input !== null) {
+    const count = parseInt(input, 10);
+    if (!isNaN(count) && count >= 1 && count <= 12) {
+      generateSmartChainedTimes(groupIndex, count);
+    } else {
+      showToast('Masukkan jumlah tayang antara 1 sampai 12', 'warning');
+    }
+  }
+}
+window.promptCustomChainedTimes = promptCustomChainedTimes;
+
+// Automatically fix collision between this slot and the previous slot
+function autoFixSlotCollision(groupIndex, timeIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!group.times || !group.times[timeIndex] || timeIndex <= 0) return;
+
+  const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+  const stepMinutes = durMins + gapMins;
+
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const patternVal = patternInput ? patternInput.value : 'none';
+  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
+
+  let selectedWeeklyDays = [];
+  if (patternVal === 'weekly') {
+    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+  }
+
+  const prevT = group.times[timeIndex - 1];
+  let prevStart = null;
+  if (prevT.scheduleTime) {
+    const p = new Date(prevT.scheduleTime);
+    if (!isNaN(p.getTime())) prevStart = p;
+  }
+  if (!prevStart && prevT.timeOnly) {
+    const sched = calculateUpcomingDateTimeForSlot(prevT.timeOnly, patternVal, selectedWeeklyDays);
+    const p = new Date(sched);
+    if (!isNaN(p.getTime())) prevStart = p;
+  }
+  if (!prevStart) prevStart = new Date(Date.now() + 15 * 60 * 1000);
+
+  const safeDate = new Date(prevStart.getTime() + stepMinutes * 60 * 1000);
+  const dtStr = formatLocalDateTime(safeDate);
+  const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
+
+  group.times[timeIndex].scheduleTime = isRecurring
+    ? calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays)
+    : dtStr;
+  group.times[timeIndex].timeOnly = timeOnlyStr;
+
+  // Cascade shift any further slots
+  for (let k = timeIndex + 1; k < group.times.length; k++) {
+    const prior = group.times[k - 1];
+    const priorStart = new Date(prior.scheduleTime).getTime();
+    const currentSlotStart = new Date(group.times[k].scheduleTime).getTime();
+    if (isNaN(currentSlotStart) || currentSlotStart < priorStart + durMins * 60 * 1000) {
+      const newStart = new Date(priorStart + stepMinutes * 60 * 1000);
+      const newDt = formatLocalDateTime(newStart);
+      const newTimeOnly = newDt.includes('T') ? newDt.split('T')[1].slice(0, 5) : '13:00';
+      group.times[k].scheduleTime = isRecurring
+        ? calculateUpcomingDateTimeForSlot(newTimeOnly, patternVal, selectedWeeklyDays)
+        : newDt;
+      group.times[k].timeOnly = newTimeOnly;
+    }
+  }
+
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+  showToast(`Jam Siaran #${timeIndex + 1} disesuaikan ke ${timeOnlyStr} (Jeda aman ${gapMins}m)`, 'success');
+}
+window.autoFixSlotCollision = autoFixSlotCollision;
+
+// Automatically align all slots in a group so none collide
+function autoAlignAllGroupTimes(groupIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!Array.isArray(group.times) || group.times.length <= 1) {
+    showToast('Hanya ada 1 jadwal siaran, tidak ada tabrakan', 'info');
+    return;
+  }
+
+  const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+  const stepMinutes = durMins + gapMins;
+
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const patternVal = patternInput ? patternInput.value : 'none';
+  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
+
+  let selectedWeeklyDays = [];
+  if (patternVal === 'weekly') {
+    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+  }
+
+  for (let i = 1; i < group.times.length; i++) {
+    const priorSlot = group.times[i - 1];
+    const priorStart = new Date(priorSlot.scheduleTime).getTime();
+    const minSafeStart = new Date(priorStart + stepMinutes * 60 * 1000);
+
+    const thisStart = new Date(group.times[i].scheduleTime).getTime();
+    if (isNaN(thisStart) || thisStart < priorStart + durMins * 60 * 1000) {
+      const dtStr = formatLocalDateTime(minSafeStart);
+      const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
+      group.times[i].scheduleTime = isRecurring ? calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays) : dtStr;
+      group.times[i].timeOnly = timeOnlyStr;
+    }
+  }
+
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+  showToast(`Semua jam siaran berhasil dirapikan dengan jeda aman ${gapMins} menit!`, 'success');
+}
+window.autoAlignAllGroupTimes = autoAlignAllGroupTimes;
+
+// Backward-compatibility alias
+function addQuickTimeToGroup(groupIndex, hoursToAdd = 2) {
+  addCustomTimeToGroup(groupIndex);
+}
+window.addQuickTimeToGroup = addQuickTimeToGroup;
+
+// Remove time from group
+function removeTimeFromGroup(groupIndex, timeIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!group.times || group.times.length <= 1) {
+    showToast('Minimal harus ada 1 jadwal untuk siaran ini', 'warning');
+    return;
+  }
+  group.times.splice(timeIndex, 1);
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+  if (typeof loadRecreateTitleRotationPreview === 'function') {
+    loadRecreateTitleRotationPreview();
+  }
+  if (typeof loadRecreateThumbnailRotationPreview === 'function') {
+    loadRecreateThumbnailRotationPreview();
+  }
+}
 window.removeTimeFromGroup = removeTimeFromGroup;
 
 // Remove entire broadcast group
@@ -9822,20 +10354,22 @@ function removeRecreateBroadcastGroup(groupIndex) {
 }
 window.removeRecreateBroadcastGroup = removeRecreateBroadcastGroup;
 
-// Update group slot time
+// Update group slot time with smart collision auto-cascade
 function updateGroupSlotTime(groupIndex, timeIndex, value, isTimeOnly = false) {
   if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
     const group = window.recreateBroadcastGroups[groupIndex];
     if (group.times && group.times[timeIndex]) {
+      const patternInput = document.getElementById('recreateRecurringPatternInput');
+      const pattern = patternInput ? patternInput.value : 'daily';
+      const isRecurring = (pattern === 'daily' || pattern === 'weekly');
+      let selectedWeeklyDays = [];
+      if (pattern === 'weekly') {
+        const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+        if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+      }
+
       if (isTimeOnly) {
         group.times[timeIndex].timeOnly = value;
-        const patternInput = document.getElementById('recreateRecurringPatternInput');
-        const pattern = patternInput ? patternInput.value : 'daily';
-        let selectedWeeklyDays = [];
-        if (pattern === 'weekly') {
-          const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
-          if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
-        }
         group.times[timeIndex].scheduleTime = calculateUpcomingDateTimeForSlot(value, pattern, selectedWeeklyDays);
       } else {
         group.times[timeIndex].scheduleTime = value;
@@ -9843,6 +10377,30 @@ function updateGroupSlotTime(groupIndex, timeIndex, value, isTimeOnly = false) {
           group.times[timeIndex].timeOnly = value.split('T')[1].slice(0, 5);
         }
       }
+
+      const durMins = getGroupStreamDurationMinutes(groupIndex);
+      const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+      const stepMinutes = durMins + gapMins;
+
+      // Auto-cascade shift any subsequent slots that would now collide with this slot
+      for (let k = timeIndex + 1; k < group.times.length; k++) {
+        const prior = group.times[k - 1];
+        const priorStart = new Date(prior.scheduleTime).getTime();
+        const currentSlotStart = new Date(group.times[k].scheduleTime).getTime();
+
+        if (isNaN(currentSlotStart) || currentSlotStart < priorStart + durMins * 60 * 1000) {
+          const newStart = new Date(priorStart + stepMinutes * 60 * 1000);
+          const newDt = formatLocalDateTime(newStart);
+          const newTimeOnly = newDt.includes('T') ? newDt.split('T')[1].slice(0, 5) : '13:00';
+          group.times[k].scheduleTime = isRecurring
+            ? calculateUpcomingDateTimeForSlot(newTimeOnly, pattern, selectedWeeklyDays)
+            : newDt;
+          group.times[k].timeOnly = newTimeOnly;
+        }
+      }
+
+      syncRecreateSlotsFromGroups();
+      renderRecreateSlotList();
     }
   }
 }
@@ -11619,10 +12177,31 @@ if (recreateFromTemplateForm) {
       console.log('[recreate] Slots count:', slots.length, 'Schedules count:', schedules.length);
       console.log('[recreate] Has rotated titles available:', hasRotatedTitles);
       
+      // Validate collision before submit to prevent YouTube stream key errors
+      for (let gIdx = 0; gIdx < groups.length; gIdx++) {
+        const grp = groups[gIdx];
+        const times = grp.times || [];
+        const durMins = getGroupStreamDurationMinutes(gIdx);
+        for (let tIdx = 1; tIdx < times.length; tIdx++) {
+          const prevSlot = times[tIdx - 1];
+          const curSlot = times[tIdx];
+          const prevStart = new Date(prevSlot.scheduleTime).getTime();
+          const curStart = new Date(curSlot.scheduleTime).getTime();
+          if (!isNaN(prevStart) && !isNaN(curStart) && curStart < prevStart + durMins * 60 * 1000) {
+            showToast(`Siaran #${gIdx + 1} memiliki jam yang bertabrakan (Jam ${tIdx + 1} bentrok dengan Jam ${tIdx}). Silakan klik "Rapikan Jeda" atau "Perbaiki".`, 'error');
+            createBtn.innerHTML = originalText;
+            createBtn.disabled = false;
+            window._isRecreatingBroadcast = false;
+            return;
+          }
+        }
+      }
+
       if (schedules.length === 0 || schedules.length !== slots.length) {
         showToast('Mohon tentukan waktu siaran untuk semua slot jadwal', 'error');
         createBtn.innerHTML = originalText;
         createBtn.disabled = false;
+        window._isRecreatingBroadcast = false;
         return;
       }
       
