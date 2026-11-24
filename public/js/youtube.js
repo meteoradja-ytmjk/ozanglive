@@ -9639,7 +9639,7 @@ function renderRecreateSlotList() {
 
   const broadcastHeaderContainer = document.getElementById('recreateBroadcastHeaderContainer');
   if (broadcastHeaderContainer) {
-    broadcastHeaderContainer.style.display = totalBroadcasts > 1 ? 'flex' : 'none';
+    broadcastHeaderContainer.style.display = 'flex';
   }
 
   const slotCountBadge = document.getElementById('recreateSlotCountBadge');
@@ -9695,36 +9695,34 @@ function renderRecreateSlotList() {
     let thumbnailBadgeHtml = '';
     if (group.pinnedThumbnail) {
       thumbnailBadgeHtml = `
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-amber-400 font-mono bg-amber-500/10 border border-amber-500/20 shadow-2xs">
-          <i class="ti ti-pin text-[11px]"></i>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 shadow-xs">
+          <i class="ti ti-pin text-xs"></i>
           <span>Thumbnail Dipin</span>
         </span>`;
     } else if (rotatedThumb && rotatedThumb.filename) {
       const folderLabel = resolvedThumbFolder || 'Root';
       thumbnailBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 truncate shadow-2xs" title="Thumbnail Rotasi: Folder ${escapeHtml(folderLabel)} • Urutan #${rotatedThumb.currentIndex + 1} (${escapeHtml(rotatedThumb.filename)})">
-          <i class="ti ti-photo text-[11px] text-emerald-400 flex-shrink-0"></i>
-          <span class="truncate">📁 ${escapeHtml(folderLabel)} • <span class="text-white font-bold">#${rotatedThumb.currentIndex + 1}</span></span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-purple-300 bg-[#382654] border border-purple-500/25 truncate shadow-xs" title="Thumbnail Rotasi: Folder ${escapeHtml(folderLabel)} • Urutan #${rotatedThumb.currentIndex + 1} (${escapeHtml(rotatedThumb.filename)})">
+          <span class="truncate">${escapeHtml(folderLabel)}</span>
         </span>`;
-    } else if (resolvedThumbFolder !== null && resolvedThumbFolder !== undefined) {
+    } else if (resolvedThumbFolder !== null && resolvedThumbFolder !== undefined && resolvedThumbFolder !== '') {
       const folderLabel = resolvedThumbFolder || 'Root';
       thumbnailBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-gray-400 font-mono bg-gray-700/30 border border-gray-600/40 truncate shadow-2xs">
-          <i class="ti ti-photo text-[11px] flex-shrink-0"></i>
-          <span class="truncate">📁 Folder: ${escapeHtml(folderLabel)}</span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-purple-300 bg-[#382654] border border-purple-500/25 truncate shadow-xs" title="Thumbnail: ${escapeHtml(folderLabel)}">
+          <span class="truncate">${escapeHtml(folderLabel)}</span>
         </span>`;
     }
 
     const durH = parseInt(group.durationHours, 10) || 0;
     const durM = parseInt(group.durationMinutes, 10) || 0;
     const durTotal = group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((durH * 60) + durM);
-    const durStr = durTotal === 0 ? 'Unlimited' : (durH > 0 ? (durM > 0 ? `${durH}j ${durM}m` : `${durH} jam`) : `${durM} mnt`);
+    const durStr = durTotal === 0 ? 'Unlimited' : (durH > 0 ? (durM > 0 ? `${durH}j ${durM}m` : `${durH}j`) : `${durM}m`);
     const isLoop = group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : true;
 
     const durationBadgeHtml = `
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${durTotal === 0 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-blue-500/15 text-blue-300 border border-blue-500/30'} flex-shrink-0 shadow-2xs" title="Durasi siaran: ${durStr} • Loop: ${isLoop ? 'Aktif' : 'Mati'}">
-        <i class="ti ti-clock text-[10px]"></i>
-        <span>Durasi: <strong class="text-white">${durStr}</strong></span>
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#20293f] border border-gray-600/40 text-gray-300 flex-shrink-0 shadow-xs" title="Durasi siaran: ${durStr} • Loop: ${isLoop ? 'Aktif' : 'Mati'}">
+        <i class="ti ti-clock text-xs text-gray-400"></i>
+        <span>${durStr}</span>
       </span>`;
 
     let videoBadgeHtml = '';
@@ -9732,8 +9730,7 @@ function renderRecreateSlotList() {
     if (resolvedVidId) {
       const vidName = group.videoName || getStudioVideoName(resolvedVidId);
       videoBadgeHtml = `
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-purple-300 font-mono bg-purple-500/15 border border-purple-500/30 truncate max-w-[180px] sm:max-w-[220px] shadow-2xs" title="Video: ${escapeHtml(vidName)}">
-          <i class="ti ti-video text-[11px] text-purple-400 flex-shrink-0"></i>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-rose-300 bg-[#3d202d] border border-rose-500/25 truncate max-w-[180px] shadow-xs" title="Video: ${escapeHtml(vidName)}">
           <span class="truncate">${escapeHtml(vidName)}</span>
         </span>`;
     }
@@ -9743,84 +9740,134 @@ function renderRecreateSlotList() {
     if (resolvedAudId) {
       const audName = group.audioName || getStudioAudioName(resolvedAudId);
       audioBadgeHtml = `
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-pink-300 font-mono bg-pink-500/15 border border-pink-500/30 truncate max-w-[150px] shadow-2xs" title="Audio: ${escapeHtml(audName)}">
-          <i class="ti ti-music text-[11px] text-pink-400 flex-shrink-0"></i>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-pink-300 bg-pink-500/15 border border-pink-500/30 truncate max-w-[150px] shadow-xs" title="Audio: ${escapeHtml(audName)}">
+          <i class="ti ti-music text-xs text-pink-400 flex-shrink-0"></i>
           <span class="truncate">${escapeHtml(audName)}</span>
+        </span>`;
+    }
+
+    // Title Folder badge (Pill 1)
+    let titleFolderBadgeHtml = '';
+    const resolvedTitleFolderId = group.titleFolderId !== undefined && group.titleFolderId !== '__KEEP__'
+      ? group.titleFolderId
+      : (template.title_folder_id || null);
+
+    let titleFolderName = '';
+    if (resolvedTitleFolderId && Array.isArray(window.titleFolders)) {
+      const tf = window.titleFolders.find(f => String(f.id) === String(resolvedTitleFolderId));
+      if (tf) titleFolderName = tf.name;
+    }
+    if (!titleFolderName && group.titleFolderName) {
+      titleFolderName = group.titleFolderName;
+    }
+    if (!titleFolderName && template.title_folder_name) {
+      titleFolderName = template.title_folder_name;
+    }
+    if (!titleFolderName && template.title_folder) {
+      titleFolderName = template.title_folder;
+    }
+
+    if (titleFolderName) {
+      titleFolderBadgeHtml = `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-gray-300 bg-[#20293f] border border-gray-600/40 shadow-xs" title="Folder Judul: ${escapeHtml(titleFolderName)}">
+          <i class="ti ti-folder text-xs text-gray-400"></i>
+          <span class="truncate">${escapeHtml(titleFolderName)}</span>
         </span>`;
     }
 
     let titleContentHtml = '';
     if (isEditingTitle) {
       titleContentHtml = `
-        <div class="flex items-center gap-1.5 w-full">
-          <input type="text" id="groupTitleInput_${groupIndex}" value="${escapeHtml(group.title || '')}"
-            class="h-8 px-2.5 bg-dark-600 border border-primary rounded-lg text-xs text-white flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder="Masukkan judul siaran..."
-            onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateGroupTitle(${groupIndex})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateGroupTitle(${groupIndex})}">
-          <button type="button" onclick="saveRecreateGroupTitle(${groupIndex})" class="w-8 h-8 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-lg flex-shrink-0 transition-colors active:scale-95" title="Simpan judul">
-            <i class="ti ti-check text-xs"></i>
-          </button>
-          <button type="button" onclick="cancelEditRecreateGroupTitle(${groupIndex})" class="w-8 h-8 flex items-center justify-center bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-lg flex-shrink-0 transition-colors active:scale-95" title="Batal">
-            <i class="ti ti-x text-xs"></i>
-          </button>
+        <div class="space-y-3 w-full">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-[#523b7a] border border-purple-400/30 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-inner">
+              ${String(groupIndex + 1).padStart(2, '0')}
+            </div>
+            <div class="flex-1 min-w-0">
+              <label class="text-[11px] font-semibold text-gray-300 block mb-1">Edit Judul Siaran #${groupIndex + 1}:</label>
+              <input type="text" id="groupTitleInput_${groupIndex}" value="${escapeHtml(group.title || '')}"
+                class="w-full h-9 px-3 bg-dark-600 border border-primary rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Masukkan judul siaran..."
+                onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateGroupTitle(${groupIndex})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateGroupTitle(${groupIndex})}">
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-2">
+            <button type="button" onclick="cancelEditRecreateGroupTitle(${groupIndex})" class="h-8 px-3.5 bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-xl text-xs font-semibold transition-colors active:scale-95 cursor-pointer">
+              Batal
+            </button>
+            <button type="button" onclick="saveRecreateGroupTitle(${groupIndex})" class="h-8 px-4 bg-primary hover:bg-primary-focus text-white rounded-xl text-xs font-bold transition-colors active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-sm">
+              <i class="ti ti-check text-xs"></i>
+              <span>Simpan Judul</span>
+            </button>
+          </div>
         </div>`;
     } else {
-      let titleDisplayBody = '';
+      let titleDisplayMain = '';
       if (group.customTitle) {
-        titleDisplayBody = `
-          <div class="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-            <span class="text-xs text-white font-semibold break-words leading-relaxed">${escapeHtml(group.title)}</span>
+        titleDisplayMain = `
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2">${escapeHtml(group.title)}</span>
             <span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded font-normal flex-shrink-0">Kustom</span>
           </div>`;
       } else if (isRotated) {
-        titleDisplayBody = `
-          <div class="space-y-0.5 min-w-0 flex-1">
-            <div class="text-xs text-primary font-semibold break-words leading-relaxed flex items-center gap-1" title="Judul dari Rotasi Judul">
-              <i class="ti ti-rotate-clockwise text-xs flex-shrink-0"></i>
-              <span>${escapeHtml(rotatedTitle)}</span>
-            </div>
-            <div class="text-[10px] text-gray-400 truncate" title="Judul asli template: ${escapeHtml(originalTitle)}">
-              Asli: <span class="text-gray-300">${escapeHtml(originalTitle)}</span>
-            </div>
+        titleDisplayMain = `
+          <div class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2 flex items-center gap-1.5" title="Judul dari Rotasi Judul">
+            <i class="ti ti-rotate-clockwise text-xs text-primary flex-shrink-0"></i>
+            <span>${escapeHtml(rotatedTitle)}</span>
           </div>`;
       } else {
-        titleDisplayBody = `
-          <div class="text-xs text-white font-semibold break-words leading-relaxed flex-1" title="${escapeHtml(currentTitle)}">
+        titleDisplayMain = `
+          <div class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2" title="${escapeHtml(currentTitle)}">
             ${escapeHtml(currentTitle)}
           </div>`;
       }
 
       titleContentHtml = `
-        <div class="space-y-2.5 w-full">
-          <!-- Line 1: Judul Full (Lebar Penuh Tanpa Tertekan) -->
-          <div class="flex items-start gap-2 w-full">
-            <span class="px-2 py-0.5 bg-primary/20 text-primary font-bold text-[11px] rounded mt-0.5 flex-shrink-0">#${groupIndex + 1}</span>
+        <div class="space-y-3 w-full">
+          <!-- Line 1: [ 01 ] + Judul & Asli + [ ••• ] -->
+          <div class="flex items-start gap-3 w-full">
+            <div class="w-12 h-12 rounded-xl bg-[#523b7a] border border-purple-400/30 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-inner mt-0.5">
+              ${String(groupIndex + 1).padStart(2, '0')}
+            </div>
             <div class="min-w-0 flex-1">
-              ${titleDisplayBody}
-              <div class="flex items-center gap-2 flex-wrap mt-1.5">
-                ${thumbnailBadgeHtml}
-                ${videoBadgeHtml}
-                ${audioBadgeHtml}
-                ${durationBadgeHtml}
+              ${titleDisplayMain}
+              <div class="text-xs text-gray-400 truncate mt-0.5" title="Asli: ${escapeHtml(originalTitle)}">
+                Asli: <span class="text-gray-400">${escapeHtml(originalTitle)}</span>
               </div>
+            </div>
+            <div class="flex items-center gap-1 flex-shrink-0 ml-1">
+              <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                title="Pilihan & Pengaturan Siaran #${groupIndex + 1}">
+                <i class="ti ti-dots text-lg"></i>
+              </button>
+              ${deleteGroupBtn}
             </div>
           </div>
 
-          <!-- Line 2: Tombol Aksi (Edit Full dan Edit Judul Ukuran Sama Rata) -->
-          <div class="flex items-center gap-2 w-full">
+          <!-- Line 2: Badges Row (Folder, Thumbnail, Video, Durasi) -->
+          <div class="flex items-center gap-2 flex-wrap pt-0.5">
+            ${titleFolderBadgeHtml}
+            ${thumbnailBadgeHtml}
+            ${videoBadgeHtml}
+            ${audioBadgeHtml}
+            ${durationBadgeHtml}
+          </div>
+
+          <!-- Line 3: Tombol Aksi (Edit Full dan Edit Judul Ukuran Sama Rata) -->
+          <div class="grid grid-cols-2 gap-2.5 w-full pt-1">
             <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
-              class="flex-1 min-w-0 h-8 px-3 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/35 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
+              class="h-12 bg-[#204373] hover:bg-[#28528c] text-blue-200 border border-blue-400/30 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
               title="Edit Full Siaran #${groupIndex + 1}: Judul, Rotasi, Thumbnail, Stream Key, Media & Durasi">
-              <i class="ti ti-edit text-xs flex-shrink-0"></i>
-              <span class="truncate">Edit Full</span>
+              <i class="ti ti-pencil text-sm text-blue-200"></i>
+              <span>Edit Full</span>
             </button>
             <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
-              class="flex-1 min-w-0 h-8 px-3 bg-dark-600 hover:bg-dark-500 text-gray-300 hover:text-white border border-gray-600/70 hover:border-gray-500 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
+              class="h-12 bg-[#2a344d] hover:bg-[#344161] text-gray-200 border border-gray-600/40 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
               title="Edit judul siaran #${groupIndex + 1}">
-              <i class="ti ti-typography text-xs flex-shrink-0"></i>
-              <span class="truncate">Edit Judul</span>
+              <i class="ti ti-typography text-sm text-gray-200"></i>
+              <span>Edit Judul</span>
             </button>
-            ${deleteGroupBtn}
           </div>
         </div>`;
     }
@@ -10079,11 +10126,13 @@ function renderRecreateSlotList() {
     globalSlotOffset += (group.times || []).length;
 
     return `
-      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-3 transition-colors hover:border-gray-600 shadow-sm overflow-hidden">
-        <!-- Baris 1 & 2: Header Siaran & Tombol Aksi -->
-        ${titleContentHtml}
+      <div id="groupCard_${groupIndex}" class="space-y-3">
+        <!-- Card 1: Header Siaran & Aksi (100% Mockup Matching) -->
+        <div class="bg-[#1a2234] border border-[#2b354d] rounded-2xl p-3.5 sm:p-4 shadow-md space-y-3">
+          ${titleContentHtml}
+        </div>
 
-        <!-- Baris Sub-kontainer Jam Tayang Bertingkat Khusus Siaran Ini (Mockup Matching) -->
+        <!-- Card 2: Sub-kontainer Jam Tayang Bertingkat Khusus Siaran Ini (Mockup Matching) -->
         <div class="bg-[#0d1222]/95 rounded-2xl p-3.5 sm:p-4 border border-[#1f2845] space-y-4 shadow-xl">
           <!-- 1. Header Jam Tayang Siaran + Tombol Tambah Jam -->
           <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#1f2845]">
