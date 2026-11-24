@@ -9560,6 +9560,66 @@ function formatShortDateTimeDisplay(dtStr) {
 }
 window.formatShortDateTimeDisplay = formatShortDateTimeDisplay;
 
+/**
+ * Format string datetime (YYYY-MM-DDTHH:mm) ke format tanggal Indonesia lengkap (e.g. 24 November 2026)
+ */
+function formatIndonesianFullDate(dtStr) {
+  if (!dtStr) return 'Tanggal belum diatur';
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  try {
+    if (typeof dtStr === 'string' && dtStr.includes('T')) {
+      const [dPart] = dtStr.split('T');
+      const parts = dPart.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(d) && !isNaN(m) && months[m]) {
+          return `${d} ${months[m]} ${y}`;
+        }
+      }
+    }
+    const d = new Date(dtStr);
+    if (!isNaN(d.getTime())) {
+      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    }
+  } catch (_) {}
+  return String(dtStr).slice(0, 10);
+}
+window.formatIndonesianFullDate = formatIndonesianFullDate;
+
+/**
+ * Format durasi menit ke label ramah pengguna (e.g. 4 jam, 4 menit, 1 jam 30 mnt)
+ */
+function formatDurationLabel(durMins) {
+  const mTotal = parseInt(durMins, 10) || 0;
+  if (mTotal <= 0) return '0 menit';
+  const h = Math.floor(mTotal / 60);
+  const m = mTotal % 60;
+  if (h > 0 && m > 0) return `${h} jam ${m} mnt`;
+  if (h > 0) return `${h} jam`;
+  return `${m} menit`;
+}
+window.formatDurationLabel = formatDurationLabel;
+
+/**
+ * Toggle mode inline edit pada card jadwal
+ */
+function toggleEditSlotCard(groupIndex, timeIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (group._editingTimeIndex === timeIndex) {
+    group._editingTimeIndex = null;
+  } else {
+    group._editingTimeIndex = timeIndex;
+  }
+  renderRecreateSlotList();
+}
+window.toggleEditSlotCard = toggleEditSlotCard;
+
 // Render the multi-slot schedule list for the recreate modal (Grouped per Broadcast)
 function renderRecreateSlotList() {
   const listEl = document.getElementById('recreateBroadcastList');
@@ -9575,6 +9635,11 @@ function renderRecreateSlotList() {
   const bCountBadge = document.getElementById('recreateBroadcastCountBadge');
   if (bCountBadge) {
     bCountBadge.textContent = `${totalBroadcasts} Siaran`;
+  }
+
+  const broadcastHeaderContainer = document.getElementById('recreateBroadcastHeaderContainer');
+  if (broadcastHeaderContainer) {
+    broadcastHeaderContainer.style.display = totalBroadcasts > 1 ? 'flex' : 'none';
   }
 
   const slotCountBadge = document.getElementById('recreateSlotCountBadge');
@@ -9768,11 +9833,14 @@ function renderRecreateSlotList() {
       const canDeleteTime = (group.times || []).length > 1;
       const deleteTimeBtn = canDeleteTime
         ? `<button type="button" onclick="removeTimeFromGroup(${groupIndex}, ${timeIndex})"
-             class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded border border-gray-600/60 hover:border-red-500/40 transition-colors flex-shrink-0 active:scale-95 cursor-pointer"
-             title="Hapus jam tayang ini">
-             <i class="ti ti-trash text-[11px]"></i>
+             class="h-8 px-3.5 bg-[#381624] hover:bg-[#4d1f32] text-rose-300 hover:text-white border border-rose-500/35 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+             title="Hapus jadwal ini">
+             <i class="ti ti-trash text-xs"></i>
+             <span>Hapus</span>
            </button>`
         : '';
+
+      const isEditingCard = Boolean(group._editingTimeIndex === timeIndex);
 
       // Calculate slot duration & start/end ms for this slot
       const slotDurMins = getSlotDurationMinutes(groupIndex, timeIndex);
@@ -9792,15 +9860,16 @@ function renderRecreateSlotList() {
 
       let gapBadgeHtml = '';
       let estRangeStr = '';
+      let isColliding = false;
+      let overlapMins = 0;
+
       if (slotStartMs > 0) {
         const slotEndMs = slotStartMs + slotDurMins * 60 * 1000;
         const startFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(slotStartMs)));
         const endFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(slotEndMs)));
         estRangeStr = `${startFormatted.timeStr} - ${endFormatted.timeStr}`;
 
-        if (timeIndex === 0) {
-          gapBadgeHtml = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-primary/90 bg-primary/10 border border-primary/20 whitespace-nowrap"><i class="ti ti-player-play text-[9px]"></i> Mulai</span>`;
-        } else if (timeIndex > 0 && group.times[timeIndex - 1]) {
+        if (timeIndex > 0 && group.times[timeIndex - 1]) {
           const prevT = group.times[timeIndex - 1];
           const prevSlotDurMins = getSlotDurationMinutes(groupIndex, timeIndex - 1);
           let prevStartMs = 0;
@@ -9820,18 +9889,18 @@ function renderRecreateSlotList() {
             const diffMins = Math.round(diffMs / 60000);
 
             if (diffMs < 0) {
-              const overlapMins = Math.abs(diffMins);
-              const prevEndFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(prevEndMs)));
+              isColliding = true;
+              overlapMins = Math.abs(diffMins);
               gapBadgeHtml = `
-                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/40 animate-pulse whitespace-nowrap"
-                      title="Siaran ini tabrakan ${overlapMins} menit! Siaran #${timeIndex} baru selesai jam ${prevEndFormatted.timeStr}">
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/40 animate-pulse whitespace-nowrap"
+                      title="Siaran ini tabrakan ${overlapMins} menit!">
                   <i class="ti ti-alert-triangle text-xs text-rose-400"></i>
                   <span>Bentrok (-${overlapMins}m)</span>
                 </span>
                 <button type="button" onclick="autoFixSlotCollision(${groupIndex}, ${timeIndex})"
-                  class="h-6 px-1.5 bg-rose-500/25 hover:bg-rose-500/40 text-rose-300 border border-rose-500/50 rounded text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-2xs cursor-pointer"
-                  title="Sesuaikan jam ini otomatis agar tidak tabrakan (+${groupGapMins}m setelah siaran sebelumnya selesai)">
-                  <i class="ti ti-wand text-[10px]"></i>
+                  class="h-6 px-2 bg-rose-500/30 hover:bg-rose-500/45 text-rose-200 border border-rose-500/50 rounded-lg text-xs font-bold transition-all flex items-center gap-1 active:scale-95 shadow-2xs cursor-pointer"
+                  title="Sesuaikan jam ini otomatis agar tidak tabrakan">
+                  <i class="ti ti-wand text-xs"></i>
                   <span>Perbaiki</span>
                 </button>
               `;
@@ -9840,9 +9909,9 @@ function renderRecreateSlotList() {
               const gRemMin = diffMins % 60;
               const gapText = gHour > 0 ? (gRemMin > 0 ? `${gHour}j ${gRemMin}m` : `${gHour} jam`) : `${diffMins}m`;
               gapBadgeHtml = `
-                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 whitespace-nowrap"
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 whitespace-nowrap"
                       title="Jeda aman ${gapText} setelah Siaran #${timeIndex} selesai">
-                  <i class="ti ti-check text-[10px]"></i>
+                  <i class="ti ti-check text-xs"></i>
                   <span>Jeda ${gapText}</span>
                 </span>
               `;
@@ -9851,89 +9920,158 @@ function renderRecreateSlotList() {
         }
       }
 
-      // Compact Duration Editor per Slot
-      const durationEditorHtml = `
-        <div class="inline-flex items-center gap-1 bg-dark-600/90 hover:bg-dark-500/90 px-1.5 sm:px-2 py-1 rounded-lg border border-gray-600/80 hover:border-gray-500 transition-colors shadow-2xs flex-shrink-0" title="Tentukan durasi siaran untuk Jam #${timeIndex + 1}">
-          <i class="ti ti-hourglass-empty text-[11px] text-amber-400 flex-shrink-0"></i>
-          <span class="text-[10px] text-gray-300 font-medium whitespace-nowrap">Durasi:</span>
-          <div class="inline-flex items-center gap-0.5">
-            <input type="number" min="0" max="24" value="${slotDurH}"
-              id="slot_${groupIndex}_${timeIndex}_h"
-              onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, this.value, null)"
-              class="w-6 sm:w-7 h-5 text-center bg-dark-700 hover:bg-dark-600 border border-gray-600 focus:border-primary rounded text-[11px] font-bold text-white px-0.5 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
-              title="Jam durasi siaran">
-            <span class="text-[10px] text-gray-400 font-semibold">j</span>
-          </div>
-          <div class="inline-flex items-center gap-0.5">
-            <input type="number" min="0" max="59" value="${slotDurM}"
-              id="slot_${groupIndex}_${timeIndex}_m"
-              onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, null, this.value)"
-              class="w-6 sm:w-7 h-5 text-center bg-dark-700 hover:bg-dark-600 border border-gray-600 focus:border-primary rounded text-[11px] font-bold text-white px-0.5 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
-              title="Menit durasi siaran">
-            <span class="text-[10px] text-gray-400 font-semibold">m</span>
-          </div>
-        </div>
-      `;
+      // Display values
+      let timeOnlyVal = t.timeOnly || '13:00';
+      if (!timeOnlyVal && t.scheduleTime && t.scheduleTime.includes('T')) {
+        timeOnlyVal = t.scheduleTime.split('T')[1].slice(0, 5);
+      }
+      const fullDateStr = isRecurring ? 'Setiap Hari' : formatIndonesianFullDate(t.scheduleTime);
+      const repeatText = isRecurring ? (currentMode === 'weekly' ? 'Mingguan' : 'Harian') : 'Sekali';
+      const slotDurText = formatDurationLabel(slotDurMins);
+      const slotNumStr = String(timeIndex + 1).padStart(2, '0');
 
-      let timeInputHtml = '';
-      if (isRecurring) {
-        let timeVal = t.timeOnly || '13:00';
-        if (!timeVal && t.scheduleTime && t.scheduleTime.includes('T')) {
-          timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
-        }
-        timeInputHtml = `
-          <div class="flex items-center gap-1.5 justify-end flex-wrap sm:flex-nowrap">
-            ${durationEditorHtml}
-            <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeVal}"
-              onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
-              class="h-7.5 w-[90px] sm:w-[105px] px-1.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded-lg text-xs font-semibold text-white text-center focus:outline-none [color-scheme:dark] transition-colors shadow-2xs flex-shrink-0">
-            ${deleteTimeBtn}
-          </div>
-        `;
-      } else {
-        const compactDt = formatShortDateTimeDisplay(t.scheduleTime);
-        timeInputHtml = `
-          <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0 flex-wrap sm:flex-nowrap">
-            ${durationEditorHtml}
-            <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7.5 px-2 sm:px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-2xs select-none flex-shrink-0"
-                 onclick="openRecreateDateTimePicker(this)"
-                 title="Klik untuk memilih tanggal dan jam siaran">
-              <i class="ti ti-calendar text-gray-400 text-xs flex-shrink-0 pointer-events-none"></i>
-              <!-- Tanggal singkat: 12/9/26 -->
-              <span class="recreate-date-text text-gray-300 font-mono text-xs tracking-tight flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.dateStr}</span>
-              <!-- Titik pemisah -->
-              <span class="text-gray-400 font-bold text-xs flex-shrink-0 pointer-events-none leading-none">.</span>
-              <!-- Jam jelas menonjol: 09.00 -->
-              <span class="recreate-time-text text-primary font-mono text-xs sm:text-sm font-bold tracking-wider flex-shrink-0 whitespace-nowrap pointer-events-none">${compactDt.timeStr}</span>
-              <i class="ti ti-clock text-primary/70 text-xs ml-0.5 flex-shrink-0 pointer-events-none"></i>
-
-              <!-- Native input overlay for picking & form submission -->
-              <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
-                onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
-                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
+      if (isEditingCard) {
+        // Expanded editing mode inside the card
+        return `
+          <div class="bg-[#131a31] border-2 border-primary/60 rounded-2xl p-4 shadow-xl space-y-3.5 transition-all w-full">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-base font-bold text-white tracking-wide">Jadwal ${slotNumStr}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/20 border border-primary/40 text-primary">
+                  <i class="ti ti-pencil text-xs"></i> Mode Edit
+                </span>
+              </div>
+              <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})" class="text-gray-400 hover:text-white p-1" title="Tutup edit">
+                <i class="ti ti-x text-sm"></i>
+              </button>
             </div>
-            ${deleteTimeBtn}
+
+            <!-- Form Edit Waktu & Durasi -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[#243053]/80">
+              <div class="space-y-1">
+                <label class="text-[11px] text-gray-400 font-semibold flex items-center gap-1">
+                  <i class="ti ti-calendar-time text-xs text-primary"></i> Waktu Mulai:
+                </label>
+                ${isRecurring ? `
+                  <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeOnlyVal}"
+                    onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
+                    class="w-full h-9 px-3 bg-[#182138] hover:bg-[#1e2a47] border border-gray-600 focus:border-primary rounded-xl text-xs font-bold text-white text-center [color-scheme:dark] transition-colors">
+                ` : `
+                  <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
+                    onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
+                    class="w-full h-9 px-3 bg-[#182138] hover:bg-[#1e2a47] border border-gray-600 focus:border-primary rounded-xl text-xs font-bold text-white [color-scheme:dark] transition-colors">
+                `}
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[11px] text-gray-400 font-semibold flex items-center gap-1">
+                  <i class="ti ti-clock text-xs text-amber-400"></i> Durasi Siaran:
+                </label>
+                <div class="flex items-center gap-1.5 h-9 bg-[#182138] px-3 rounded-xl border border-gray-600">
+                  <input type="number" min="0" max="24" value="${slotDurH}"
+                    onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, this.value, null)"
+                    class="w-10 h-7 text-center bg-dark-700 hover:bg-dark-600 border border-gray-500 focus:border-primary rounded-lg text-xs font-bold text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                  <span class="text-xs text-gray-400 font-medium">jam</span>
+                  <input type="number" min="0" max="59" value="${slotDurM}"
+                    onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, null, this.value)"
+                    class="w-10 h-7 text-center bg-dark-700 hover:bg-dark-600 border border-gray-500 focus:border-primary rounded-lg text-xs font-bold text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                  <span class="text-xs text-gray-400 font-medium">mnt</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer Edit Mode -->
+            <div class="flex items-center justify-between pt-2 border-t border-[#243053]/60">
+              <span class="text-xs text-gray-400 font-mono">Estimasi: <strong class="text-white">${estRangeStr}</strong></span>
+              <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})"
+                class="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer">
+                <i class="ti ti-check text-xs"></i>
+                <span>Selesai</span>
+              </button>
+            </div>
           </div>
         `;
       }
 
-      const badgeHtml = isRecurring
-        ? `<span class="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-medium flex items-center gap-1 whitespace-nowrap">
-             <i class="ti ${badgeIcon} text-[10px]"></i> ${badgeText}
-           </span>`
-        : `<span class="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-medium whitespace-nowrap">
-             Sekali
-           </span>`;
-
+      // Default Display Mode - 100% Mockup Matching
       return `
-        <div class="flex items-center justify-between gap-1.5 sm:gap-2 bg-dark-700/60 px-2 sm:px-2.5 py-1.5 rounded-lg border border-gray-600/40 flex-wrap sm:flex-nowrap w-full">
-          <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-wrap">
-            <span class="text-[11px] font-bold text-gray-200 whitespace-nowrap">Jam ${timeIndex + 1}:</span>
-            ${badgeHtml}
-            ${gapBadgeHtml}
-            ${estRangeStr ? `<span class="text-[10px] text-gray-400 font-mono hidden md:inline" title="Estimasi waktu tayang">(${estRangeStr})</span>` : ''}
+        <div class="bg-[#131a31] border border-[#243053] rounded-2xl p-4 shadow-md space-y-3.5 transition-all hover:border-[#354675] w-full">
+          <!-- Hidden inputs for backend submission -->
+          ${isRecurring ? `
+            <input type="hidden" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" value="${timeOnlyVal}">
+          ` : `
+            <input type="hidden" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" value="${t.scheduleTime || ''}">
+          `}
+
+          <!-- Header Card: Jadwal 01 + Badge Aktif / Bentrok + ⋮ Menu -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-base font-bold text-white tracking-wide">Jadwal ${slotNumStr}</span>
+              ${isColliding ? gapBadgeHtml : `
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>Aktif</span>
+                </span>
+                ${gapBadgeHtml}
+              `}
+            </div>
+            <div class="text-gray-400 hover:text-white cursor-pointer p-1" title="Pilihan Jadwal" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
+              <i class="ti ti-dots-vertical text-base"></i>
+            </div>
           </div>
-          ${timeInputHtml}
+
+          <!-- 3-Column Info Grid: Pengulangan | Durasi | Waktu Mulai -->
+          <div class="grid grid-cols-3 divide-x divide-[#243053] py-2 border-y border-[#243053]/80">
+            <!-- Col 1: Pengulangan -->
+            <div class="px-2 sm:px-3 py-1 space-y-1">
+              <div class="flex items-center gap-1.5 text-gray-400 text-xs">
+                <i class="ti ti-repeat text-sm text-gray-400"></i>
+                <span class="text-[11px]">Pengulangan</span>
+              </div>
+              <div class="text-sm sm:text-base font-bold text-white capitalize">
+                ${repeatText}
+              </div>
+            </div>
+
+            <!-- Col 2: Durasi -->
+            <div class="px-2 sm:px-3 py-1 space-y-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors" title="Klik untuk edit durasi" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
+              <div class="flex items-center gap-1.5 text-gray-400 text-xs">
+                <i class="ti ti-clock text-sm text-gray-400"></i>
+                <span class="text-[11px]">Durasi</span>
+              </div>
+              <div class="text-sm sm:text-base font-bold text-white">
+                ${slotDurText}
+              </div>
+            </div>
+
+            <!-- Col 3: Waktu Mulai -->
+            <div class="px-2 sm:px-3 py-1 space-y-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors" title="Klik untuk edit waktu mulai" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
+              <div class="flex items-center gap-1.5 text-gray-400 text-xs">
+                <i class="ti ti-calendar-time text-sm text-gray-400"></i>
+                <span class="text-[11px]">Waktu mulai</span>
+              </div>
+              <div class="text-sm sm:text-base font-bold text-white tracking-wider">
+                ${timeOnlyVal}
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Footer: Tanggal + Tombol Edit & Hapus -->
+          <div class="flex items-center justify-between pt-0.5 flex-wrap gap-2">
+            <div class="flex items-center gap-2 text-xs text-gray-300 font-medium">
+              <i class="ti ti-calendar text-gray-400 text-sm flex-shrink-0"></i>
+              <span class="truncate">${fullDateStr}</span>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})"
+                class="h-8 px-3.5 bg-[#1a2645] hover:bg-[#23335c] text-blue-300 hover:text-white border border-blue-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                title="Edit jadwal ini">
+                <i class="ti ti-pencil text-xs"></i>
+                <span>Edit</span>
+              </button>
+              ${deleteTimeBtn}
+            </div>
+          </div>
         </div>
       `;
     }).join('');
@@ -9941,100 +10079,137 @@ function renderRecreateSlotList() {
     globalSlotOffset += (group.times || []).length;
 
     return `
-      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-2.5 transition-colors hover:border-gray-600 shadow-sm overflow-hidden">
+      <div id="groupCard_${groupIndex}" class="bg-dark-700/80 rounded-xl p-3 border border-gray-700/80 space-y-3 transition-colors hover:border-gray-600 shadow-sm overflow-hidden">
         <!-- Baris 1 & 2: Header Siaran & Tombol Aksi -->
         ${titleContentHtml}
 
-        <!-- Baris Sub-kontainer Jam Tayang Bertingkat Khusus Siaran Ini -->
-        <div class="bg-dark-800/70 rounded-lg p-2.5 sm:p-3 border border-gray-700/60 space-y-2.5">
-          <div class="flex items-center justify-between text-xs text-gray-400 px-0.5 flex-nowrap w-full">
-            <span class="flex items-center gap-1 font-medium text-gray-300 truncate">
-              <i class="ti ti-clock text-primary text-xs flex-shrink-0"></i>
-              <span class="truncate">Jam Tayang Siaran #${groupIndex + 1}:</span>
-            </span>
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <span class="text-[10px] text-gray-400 font-mono flex-shrink-0 whitespace-nowrap">${(group.times || []).length} jadwal</span>
-              <button type="button" onclick="addCustomTimeToGroup(${groupIndex})"
-                class="h-6 px-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer"
-                title="Tambah 1 jadwal baru (dihitung otomatis dari durasi + jeda)">
-                <i class="ti ti-plus text-[10px]"></i>
-                <span>Tambah Jam</span>
-              </button>
+        <!-- Baris Sub-kontainer Jam Tayang Bertingkat Khusus Siaran Ini (Mockup Matching) -->
+        <div class="bg-[#0d1222]/95 rounded-2xl p-3.5 sm:p-4 border border-[#1f2845] space-y-4 shadow-xl">
+          <!-- 1. Header Jam Tayang Siaran + Tombol Tambah Jam -->
+          <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#1f2845]">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-inner flex-shrink-0">
+                <i class="ti ti-clock text-xl"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="text-base sm:text-lg font-bold text-white tracking-tight leading-tight truncate">Jam Tayang Siaran</h4>
+                <p class="text-xs text-gray-400 mt-0.5 truncate">Kelola jadwal penayangan otomatis</p>
+              </div>
             </div>
+            <button type="button" onclick="addCustomTimeToGroup(${groupIndex})"
+              class="h-9 px-3.5 sm:px-4 bg-primary hover:bg-primary-focus active:scale-95 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shadow-md shadow-primary/25 cursor-pointer flex-shrink-0"
+              title="Tambah jadwal baru (dihitung otomatis dari durasi + jeda)">
+              <i class="ti ti-plus text-sm"></i>
+              <span>Tambah Jam</span>
+            </button>
           </div>
 
-          <!-- List Waktu Slot -->
-          <div class="space-y-1.5">
+          <!-- 2. Sub-header: Daftar Jadwal & Badge Jumlah -->
+          <div class="flex items-center justify-between text-xs pt-0.5">
+            <div class="flex items-center gap-2 font-bold text-sm text-white">
+              <i class="ti ti-stack-2 text-base text-gray-400"></i>
+              <span>Daftar Jadwal</span>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>${(group.times || []).length} Jadwal</span>
+            </span>
+          </div>
+
+          <!-- 3. List Schedule Cards -->
+          <div class="space-y-3">
             ${timesHtml}
           </div>
 
-          <!-- Smart Interval Generator: Fleksibel & Anti-Tabrakan -->
-          <div class="pt-2.5 border-t border-gray-700/50 space-y-2.5 w-full">
-            <div class="flex items-center justify-between gap-2 text-xs flex-wrap">
-              <div class="flex items-center gap-1.5 text-gray-200">
-                <i class="ti ti-bolt text-amber-400 text-xs"></i>
-                <span class="text-[11px] font-semibold text-white">Jadwal Cerdas Otomatis:</span>
-                <span class="text-[10px] text-gray-400 font-mono">(Durasi: <strong class="text-white">${durStr}</strong>)</span>
+          <!-- 4. Section: Jadwal Cerdas Otomatis (Mockup Matching) -->
+          <div class="bg-[#131a31] rounded-2xl p-3.5 sm:p-4 border border-[#243053] space-y-3.5 shadow-md">
+            <!-- Header Jadwal Cerdas Otomatis -->
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-start gap-2.5">
+                <i class="ti ti-bolt text-amber-400 text-lg flex-shrink-0 mt-0.5"></i>
+                <div>
+                  <span class="text-sm sm:text-base font-bold text-white block leading-tight">Jadwal Cerdas Otomatis</span>
+                  <span class="text-xs text-gray-400 block mt-0.5">Atur jeda antar penayangan</span>
+                </div>
+              </div>
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300 flex-shrink-0">
+                <i class="ti ti-bolt text-xs"></i>
+                <span>Otomatis</span>
+              </span>
+            </div>
+
+            <!-- Two Cards: Durasi & Jeda -->
+            <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
+              <!-- Card 1: Durasi -->
+              <div class="bg-[#182138] rounded-xl p-3 border border-[#243053] flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-[#243053]/70 flex items-center justify-center text-gray-300 flex-shrink-0">
+                  <i class="ti ti-clock text-lg"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <span class="text-[11px] text-gray-400 font-medium block leading-tight">Durasi</span>
+                  <span class="text-xs sm:text-sm font-bold text-white block truncate mt-0.5">${formatDurationLabel(groupDurMins)}</span>
+                </div>
               </div>
 
-              <!-- Pilihan Jeda Menit & Tombol Rapikan Jeda -->
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <label for="groupGap_${groupIndex}" class="text-[11px] text-gray-400 whitespace-nowrap">Jeda:</label>
-                <select id="groupGap_${groupIndex}" onchange="updateGroupGapMinutes(${groupIndex}, this.value)"
-                  class="h-6.5 px-2 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded text-[11px] font-medium text-white focus:outline-none transition-colors [color-scheme:dark] cursor-pointer">
-                  <option value="5" ${(group.selectedGapMinutes === 5) ? 'selected' : ''}>5 Menit</option>
-                  <option value="10" ${(group.selectedGapMinutes === 10) ? 'selected' : ''}>10 Menit</option>
-                  <option value="15" ${(group.selectedGapMinutes === undefined || group.selectedGapMinutes === 15) ? 'selected' : ''}>15 Menit (Ideal)</option>
-                  <option value="30" ${(group.selectedGapMinutes === 30) ? 'selected' : ''}>30 Menit</option>
-                  <option value="60" ${(group.selectedGapMinutes === 60) ? 'selected' : ''}>60 Menit</option>
-                </select>
+              <!-- Card 2: Jeda -->
+              <div class="bg-[#182138] rounded-xl p-3 border border-[#243053] hover:border-primary/50 flex items-center gap-3 relative cursor-pointer transition-colors shadow-2xs">
+                <div class="w-9 h-9 rounded-lg bg-[#243053]/70 flex items-center justify-center text-gray-300 flex-shrink-0 pointer-events-none">
+                  <i class="ti ti-player-pause text-lg"></i>
+                </div>
+                <div class="min-w-0 flex-1 pointer-events-none">
+                  <span class="text-[11px] text-gray-400 font-medium block leading-tight">Jeda</span>
+                  <span class="text-xs sm:text-sm font-bold text-white block truncate mt-0.5">${groupGapMins} Menit ${groupGapMins === 15 ? '(Ideal)' : ''}</span>
+                </div>
+                <i class="ti ti-chevron-down text-gray-400 text-sm ml-auto pointer-events-none flex-shrink-0"></i>
 
-                <button type="button" onclick="autoAlignAllGroupTimes(${groupIndex})"
-                  class="h-6.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded text-[11px] font-medium transition-all flex items-center gap-1 active:scale-95 shadow-2xs cursor-pointer"
-                  title="Hitung dan rapikan semua jeda siaran otomatis agar 100% anti-tabrakan">
-                  <i class="ti ti-wand text-xs"></i>
-                  <span>Rapikan Jeda</span>
-                </button>
+                <!-- Invisible select over the entire card -->
+                <select id="groupGap_${groupIndex}" onchange="updateGroupGapMinutes(${groupIndex}, this.value)"
+                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
+                  <option value="5" ${groupGapMins === 5 ? 'selected' : ''}>5 Menit</option>
+                  <option value="10" ${groupGapMins === 10 ? 'selected' : ''}>10 Menit</option>
+                  <option value="15" ${groupGapMins === 15 ? 'selected' : ''}>15 Menit (Ideal)</option>
+                  <option value="30" ${groupGapMins === 30 ? 'selected' : ''}>30 Menit</option>
+                  <option value="60" ${groupGapMins === 60 ? 'selected' : ''}>60 Menit</option>
+                </select>
               </div>
             </div>
 
-            <!-- Tombol Pilihan Cepat Frekuensi Tayang & Custom -->
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full">
+            <!-- Tombol Cepat Frekuensi Tayang -->
+            <div class="grid grid-cols-5 gap-1.5 pt-0.5">
               <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 2)"
-                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 2) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
-                title="Jadwalkan tayang 2x sehari sesuai durasi siaran + jeda">
-                <i class="ti ti-repeat text-[11px]"></i>
+                class="h-7.5 px-1 rounded-xl bg-[#182138] hover:bg-primary/20 border border-[#243053] hover:border-primary/50 text-gray-300 hover:text-primary text-[11px] font-semibold transition-all active:scale-95 flex items-center justify-center ${((group.times || []).length === 2) ? 'border-primary bg-primary/15 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 2x sehari">
                 <span>Tayang 2x</span>
               </button>
-
               <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 3)"
-                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 3) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
-                title="Jadwalkan tayang 3x sehari sesuai durasi siaran + jeda">
-                <i class="ti ti-repeat text-[11px]"></i>
+                class="h-7.5 px-1 rounded-xl bg-[#182138] hover:bg-primary/20 border border-[#243053] hover:border-primary/50 text-gray-300 hover:text-primary text-[11px] font-semibold transition-all active:scale-95 flex items-center justify-center ${((group.times || []).length === 3) ? 'border-primary bg-primary/15 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 3x sehari">
                 <span>Tayang 3x</span>
               </button>
-
               <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 4)"
-                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 4) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
-                title="Jadwalkan tayang 4x sehari sesuai durasi siaran + jeda">
-                <i class="ti ti-repeat text-[11px]"></i>
+                class="h-7.5 px-1 rounded-xl bg-[#182138] hover:bg-primary/20 border border-[#243053] hover:border-primary/50 text-gray-300 hover:text-primary text-[11px] font-semibold transition-all active:scale-95 flex items-center justify-center ${((group.times || []).length === 4) ? 'border-primary bg-primary/15 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 4x sehari">
                 <span>Tayang 4x</span>
               </button>
-
               <button type="button" onclick="generateSmartChainedTimes(${groupIndex}, 5)"
-                class="h-7.5 px-1.5 bg-dark-600 hover:bg-primary/20 text-gray-200 hover:text-primary hover:border-primary/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer ${((group.times || []).length === 5) ? 'border-primary/60 bg-primary/10 text-primary font-bold' : ''}"
-                title="Jadwalkan tayang 5x sehari sesuai durasi siaran + jeda">
-                <i class="ti ti-repeat text-[11px]"></i>
+                class="h-7.5 px-1 rounded-xl bg-[#182138] hover:bg-primary/20 border border-[#243053] hover:border-primary/50 text-gray-300 hover:text-primary text-[11px] font-semibold transition-all active:scale-95 flex items-center justify-center ${((group.times || []).length === 5) ? 'border-primary bg-primary/15 text-primary font-bold' : ''}"
+                title="Jadwalkan tayang 5x sehari">
                 <span>Tayang 5x</span>
               </button>
-
               <button type="button" onclick="promptCustomChainedTimes(${groupIndex})"
-                class="h-7.5 px-1.5 bg-dark-600 hover:bg-blue-500/20 text-gray-200 hover:text-blue-400 hover:border-blue-500/50 border border-gray-600/70 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-2xs cursor-pointer col-span-2 sm:col-span-1"
-                title="Tentukan jumlah frekuensi tayang bebas (misal 6x, 7x, atau 8x)">
-                <i class="ti ti-adjustments text-[11px]"></i>
-                <span>Custom (${(group.times || []).length}x)</span>
+                class="h-7.5 px-1 rounded-xl bg-[#182138] hover:bg-blue-500/20 border border-[#243053] hover:border-blue-500/50 text-gray-300 hover:text-blue-400 text-[11px] font-semibold transition-all active:scale-95 flex items-center justify-center"
+                title="Tentukan frekuensi tayang kustom">
+                <span>Custom</span>
               </button>
             </div>
+
+            <!-- Big Golden Button: Rapikan Jeda (Matching Mockup) -->
+            <button type="button" onclick="autoAlignAllGroupTimes(${groupIndex})"
+              class="w-full h-11 bg-gradient-to-r from-[#7a4e17] via-[#a36821] to-[#7a4e17] hover:from-[#8e5a1b] hover:to-[#b87525] text-[#fff4df] hover:text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 border border-[#b87d2f]/50 transition-all active:scale-[0.99] cursor-pointer"
+              title="Hitung dan rapikan semua jeda siaran otomatis agar 100% anti-tabrakan">
+              <i class="ti ti-wand text-base"></i>
+              <span>Rapikan Jeda</span>
+            </button>
           </div>
         </div>
       </div>
