@@ -9295,7 +9295,10 @@ function openRecreateFromTemplateModal(template) {
         times: [
           {
             scheduleTime: scheduledTimeStr,
-            timeOnly: timeOnlyStr
+            timeOnly: timeOnlyStr,
+            durationHours: bHours,
+            durationMinutes: bMins,
+            streamDurationMinutes: bTotalMins
           }
         ]
       });
@@ -9309,12 +9312,18 @@ function openRecreateFromTemplateModal(template) {
     if (template.recurring_enabled && recurringTimes.length > 0) {
       groupTimes = recurringTimes.map(t => ({
         scheduleTime: parseSlotTime(t, 15),
-        timeOnly: t
+        timeOnly: t,
+        durationHours: finalSingleHours,
+        durationMinutes: finalSingleMins,
+        streamDurationMinutes: finalSingleTotalMins
       })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
     } else if (recurringTimes.length > 1) {
       groupTimes = recurringTimes.map((t, idx) => ({
         scheduleTime: parseSlotTime(t, 15 + idx * 30),
-        timeOnly: t
+        timeOnly: t,
+        durationHours: finalSingleHours,
+        durationMinutes: finalSingleMins,
+        streamDurationMinutes: finalSingleTotalMins
       })).sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
     } else {
       const initialTimeStr = recurringTimes.length > 0 ? recurringTimes[0] : (template.recurring_time ? template.recurring_time.split(/[\s,]+/)[0] : null);
@@ -9323,7 +9332,10 @@ function openRecreateFromTemplateModal(template) {
       groupTimes = [
         {
           scheduleTime: initialSched,
-          timeOnly: initialTimeOnly
+          timeOnly: initialTimeOnly,
+          durationHours: finalSingleHours,
+          durationMinutes: finalSingleMins,
+          streamDurationMinutes: finalSingleTotalMins
         }
       ];
     }
@@ -9477,9 +9489,9 @@ function syncRecreateSlotsFromGroups() {
           thumbnailPath: group.thumbnailPath,
           customTitle: group.customTitle,
           useTitleRotation: group.useTitleRotation,
-          durationHours: group.durationHours,
-          durationMinutes: group.durationMinutes,
-          streamDurationMinutes: group.streamDurationMinutes,
+          durationHours: t.durationHours !== undefined ? t.durationHours : group.durationHours,
+          durationMinutes: t.durationMinutes !== undefined ? t.durationMinutes : group.durationMinutes,
+          streamDurationMinutes: t.streamDurationMinutes !== undefined ? t.streamDurationMinutes : group.streamDurationMinutes,
           loopVideo: group.loopVideo,
           videoId: group.videoId,
           videoName: group.videoName,
@@ -9762,7 +9774,11 @@ function renderRecreateSlotList() {
            </button>`
         : '';
 
-      // Calculate start and end ms for this slot
+      // Calculate slot duration & start/end ms for this slot
+      const slotDurMins = getSlotDurationMinutes(groupIndex, timeIndex);
+      const slotDurH = t.durationHours !== undefined ? (parseInt(t.durationHours, 10) || 0) : Math.floor(slotDurMins / 60);
+      const slotDurM = t.durationMinutes !== undefined ? (parseInt(t.durationMinutes, 10) || 0) : (slotDurMins % 60);
+
       let slotStartMs = 0;
       if (t.scheduleTime) {
         const p = new Date(t.scheduleTime);
@@ -9777,7 +9793,7 @@ function renderRecreateSlotList() {
       let gapBadgeHtml = '';
       let estRangeStr = '';
       if (slotStartMs > 0) {
-        const slotEndMs = slotStartMs + groupDurMins * 60 * 1000;
+        const slotEndMs = slotStartMs + slotDurMins * 60 * 1000;
         const startFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(slotStartMs)));
         const endFormatted = formatShortDateTimeDisplay(formatLocalDateTime(new Date(slotEndMs)));
         estRangeStr = `${startFormatted.timeStr} - ${endFormatted.timeStr}`;
@@ -9786,6 +9802,7 @@ function renderRecreateSlotList() {
           gapBadgeHtml = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-primary/90 bg-primary/10 border border-primary/20 whitespace-nowrap"><i class="ti ti-player-play text-[9px]"></i> Mulai</span>`;
         } else if (timeIndex > 0 && group.times[timeIndex - 1]) {
           const prevT = group.times[timeIndex - 1];
+          const prevSlotDurMins = getSlotDurationMinutes(groupIndex, timeIndex - 1);
           let prevStartMs = 0;
           if (prevT.scheduleTime) {
             const p = new Date(prevT.scheduleTime);
@@ -9798,7 +9815,7 @@ function renderRecreateSlotList() {
           }
 
           if (prevStartMs > 0) {
-            const prevEndMs = prevStartMs + groupDurMins * 60 * 1000;
+            const prevEndMs = prevStartMs + prevSlotDurMins * 60 * 1000;
             const diffMs = slotStartMs - prevEndMs;
             const diffMins = Math.round(diffMs / 60000);
 
@@ -9834,6 +9851,30 @@ function renderRecreateSlotList() {
         }
       }
 
+      // Compact Duration Editor per Slot
+      const durationEditorHtml = `
+        <div class="inline-flex items-center gap-1 bg-dark-600/90 hover:bg-dark-500/90 px-1.5 sm:px-2 py-1 rounded-lg border border-gray-600/80 hover:border-gray-500 transition-colors shadow-2xs flex-shrink-0" title="Tentukan durasi siaran untuk Jam #${timeIndex + 1}">
+          <i class="ti ti-hourglass-empty text-[11px] text-amber-400 flex-shrink-0"></i>
+          <span class="text-[10px] text-gray-300 font-medium whitespace-nowrap">Durasi:</span>
+          <div class="inline-flex items-center gap-0.5">
+            <input type="number" min="0" max="24" value="${slotDurH}"
+              id="slot_${groupIndex}_${timeIndex}_h"
+              onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, this.value, null)"
+              class="w-6 sm:w-7 h-5 text-center bg-dark-700 hover:bg-dark-600 border border-gray-600 focus:border-primary rounded text-[11px] font-bold text-white px-0.5 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
+              title="Jam durasi siaran">
+            <span class="text-[10px] text-gray-400 font-semibold">j</span>
+          </div>
+          <div class="inline-flex items-center gap-0.5">
+            <input type="number" min="0" max="59" value="${slotDurM}"
+              id="slot_${groupIndex}_${timeIndex}_m"
+              onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, null, this.value)"
+              class="w-6 sm:w-7 h-5 text-center bg-dark-700 hover:bg-dark-600 border border-gray-600 focus:border-primary rounded text-[11px] font-bold text-white px-0.5 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
+              title="Menit durasi siaran">
+            <span class="text-[10px] text-gray-400 font-semibold">m</span>
+          </div>
+        </div>
+      `;
+
       let timeInputHtml = '';
       if (isRecurring) {
         let timeVal = t.timeOnly || '13:00';
@@ -9841,18 +9882,20 @@ function renderRecreateSlotList() {
           timeVal = t.scheduleTime.split('T')[1].slice(0, 5);
         }
         timeInputHtml = `
-          <div class="flex items-center gap-1.5 justify-end flex-shrink-0">
+          <div class="flex items-center gap-1.5 justify-end flex-wrap sm:flex-nowrap">
+            ${durationEditorHtml}
             <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeVal}"
               onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
-              class="h-7.5 w-[95px] sm:w-[110px] px-1.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded-lg text-xs font-semibold text-white text-center focus:outline-none [color-scheme:dark] transition-colors shadow-2xs">
+              class="h-7.5 w-[90px] sm:w-[105px] px-1.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 focus:border-primary rounded-lg text-xs font-semibold text-white text-center focus:outline-none [color-scheme:dark] transition-colors shadow-2xs flex-shrink-0">
             ${deleteTimeBtn}
           </div>
         `;
       } else {
         const compactDt = formatShortDateTimeDisplay(t.scheduleTime);
         timeInputHtml = `
-          <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-            <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7.5 px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-2xs select-none"
+          <div class="flex items-center gap-1.5 flex-1 justify-end min-w-0 flex-wrap sm:flex-nowrap">
+            ${durationEditorHtml}
+            <div class="recreate-datetime-pill relative inline-flex items-center gap-1 sm:gap-1.5 h-7.5 px-2 sm:px-2.5 bg-dark-600 hover:bg-dark-500 border border-gray-600 hover:border-primary/60 rounded-lg cursor-pointer transition-colors shadow-2xs select-none flex-shrink-0"
                  onclick="openRecreateDateTimePicker(this)"
                  title="Klik untuk memilih tanggal dan jam siaran">
               <i class="ti ti-calendar text-gray-400 text-xs flex-shrink-0 pointer-events-none"></i>
@@ -9867,7 +9910,6 @@ function renderRecreateSlotList() {
               <!-- Native input overlay for picking & form submission -->
               <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
                 onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
-                oninput="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
                 class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 [color-scheme:dark]">
             </div>
             ${deleteTimeBtn}
@@ -9886,7 +9928,7 @@ function renderRecreateSlotList() {
       return `
         <div class="flex items-center justify-between gap-1.5 sm:gap-2 bg-dark-700/60 px-2 sm:px-2.5 py-1.5 rounded-lg border border-gray-600/40 flex-wrap sm:flex-nowrap w-full">
           <div class="flex items-center gap-1.5 text-xs text-gray-300 min-w-0 flex-wrap">
-            <span class="text-[11px] font-bold text-gray-200">Jam ${timeIndex + 1}:</span>
+            <span class="text-[11px] font-bold text-gray-200 whitespace-nowrap">Jam ${timeIndex + 1}:</span>
             ${badgeHtml}
             ${gapBadgeHtml}
             ${estRangeStr ? `<span class="text-[10px] text-gray-400 font-mono hidden md:inline" title="Estimasi waktu tayang">(${estRangeStr})</span>` : ''}
@@ -10037,6 +10079,126 @@ function getGroupStreamDurationMinutes(groupIndex) {
 }
 window.getGroupStreamDurationMinutes = getGroupStreamDurationMinutes;
 
+// Helper to get specific duration in minutes for a slot
+function getSlotDurationMinutes(groupIndex, timeIndex) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return 60;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (group.times && group.times[timeIndex]) {
+    const t = group.times[timeIndex];
+    if (t.streamDurationMinutes !== undefined && t.streamDurationMinutes !== null && !isNaN(t.streamDurationMinutes) && Number(t.streamDurationMinutes) > 0) {
+      return parseInt(t.streamDurationMinutes, 10);
+    }
+    if (t.durationHours !== undefined || t.durationMinutes !== undefined) {
+      const h = parseInt(t.durationHours, 10) || 0;
+      const m = parseInt(t.durationMinutes, 10) || 0;
+      const total = (h * 60) + m;
+      if (total > 0) return total;
+    }
+  }
+  return getGroupStreamDurationMinutes(groupIndex);
+}
+window.getSlotDurationMinutes = getSlotDurationMinutes;
+
+// Automatically adjust all subsequent slot times in a group based on each prior slot's duration + gap
+function autoAdjustSubsequentSlotsFrom(groupIndex, fromIndex = 0) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!Array.isArray(group.times) || group.times.length <= 1) return;
+
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+
+  const patternInput = document.getElementById('recreateRecurringPatternInput');
+  const patternVal = patternInput ? patternInput.value : 'none';
+  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
+
+  let selectedWeeklyDays = [];
+  if (patternVal === 'weekly') {
+    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
+    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
+  }
+
+  const startIndex = Math.max(0, fromIndex);
+
+  for (let k = startIndex + 1; k < group.times.length; k++) {
+    const priorSlot = group.times[k - 1];
+    const priorDurMins = getSlotDurationMinutes(groupIndex, k - 1);
+
+    let priorStartMs = 0;
+    if (priorSlot.scheduleTime) {
+      const p = new Date(priorSlot.scheduleTime);
+      if (!isNaN(p.getTime())) priorStartMs = p.getTime();
+    }
+    if (!priorStartMs && priorSlot.timeOnly) {
+      const sched = calculateUpcomingDateTimeForSlot(priorSlot.timeOnly, patternVal, selectedWeeklyDays);
+      const p = new Date(sched);
+      if (!isNaN(p.getTime())) priorStartMs = p.getTime();
+    }
+    if (!priorStartMs) {
+      priorStartMs = Date.now() + 15 * 60 * 1000;
+    }
+
+    const nextStartMs = priorStartMs + (priorDurMins + gapMins) * 60 * 1000;
+    const nextDate = new Date(nextStartMs);
+    const dtStr = formatLocalDateTime(nextDate);
+    const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
+
+    if (isRecurring) {
+      group.times[k].timeOnly = timeOnlyStr;
+      group.times[k].scheduleTime = calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays);
+    } else {
+      group.times[k].scheduleTime = dtStr;
+      group.times[k].timeOnly = timeOnlyStr;
+    }
+  }
+}
+window.autoAdjustSubsequentSlotsFrom = autoAdjustSubsequentSlotsFrom;
+
+// Update individual slot duration and auto-adjust subsequent slots
+function updateGroupSlotDuration(groupIndex, timeIndex, newHours, newMinutes) {
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!group.times || !group.times[timeIndex]) return;
+
+  const t = group.times[timeIndex];
+  const currentTotal = getSlotDurationMinutes(groupIndex, timeIndex);
+  let curH = Math.floor(currentTotal / 60);
+  let curM = currentTotal % 60;
+
+  if (newHours !== null && newHours !== undefined && newHours !== '') {
+    curH = Math.max(0, Math.min(24, parseInt(newHours, 10) || 0));
+  }
+  if (newMinutes !== null && newMinutes !== undefined && newMinutes !== '') {
+    curM = Math.max(0, Math.min(59, parseInt(newMinutes, 10) || 0));
+  }
+
+  // Minimum duration: 5 minutes if both 0
+  if (curH === 0 && curM === 0) {
+    curM = 5;
+    showToast('Durasi minimal siaran adalah 5 menit', 'warning');
+  }
+
+  const newTotalM = (curH * 60) + curM;
+  t.durationHours = curH;
+  t.durationMinutes = curM;
+  t.streamDurationMinutes = newTotalM;
+
+  if (group.times.length === 1) {
+    group.durationHours = curH;
+    group.durationMinutes = curM;
+    group.streamDurationMinutes = newTotalM;
+  }
+
+  // Auto adjust all subsequent slots from this slot forward
+  autoAdjustSubsequentSlotsFrom(groupIndex, timeIndex);
+
+  syncRecreateSlotsFromGroups();
+  renderRecreateSlotList();
+
+  const durLabel = curH > 0 ? (curM > 0 ? `${curH}j ${curM}m` : `${curH} jam`) : `${curM} mnt`;
+  showToast(`Durasi Jam #${timeIndex + 1} diatur ke ${durLabel}. Jam tayang setelahnya otomatis disesuaikan!`, 'success');
+}
+window.updateGroupSlotDuration = updateGroupSlotDuration;
+
 // Update selected gap minutes for group
 function updateGroupGapMinutes(groupIndex, gapValue) {
   if (window.recreateBroadcastGroups && window.recreateBroadcastGroups[groupIndex]) {
@@ -10044,7 +10206,9 @@ function updateGroupGapMinutes(groupIndex, gapValue) {
     window.recreateBroadcastGroups[groupIndex].selectedGapMinutes = gap;
     const currentCount = (window.recreateBroadcastGroups[groupIndex].times || []).length;
     if (currentCount > 1) {
-      generateSmartChainedTimes(groupIndex, currentCount);
+      autoAdjustSubsequentSlotsFrom(groupIndex, 0);
+      syncRecreateSlotsFromGroups();
+      renderRecreateSlotList();
     }
   }
 }
@@ -10057,6 +10221,8 @@ function generateSmartChainedTimes(groupIndex, count = 3) {
   const targetCount = Math.max(1, Math.min(10, Number(count) || 3));
 
   const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const durH = Math.floor(durMins / 60);
+  const durM = durMins % 60;
   const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
   const stepMinutes = durMins + gapMins;
 
@@ -10100,12 +10266,18 @@ function generateSmartChainedTimes(groupIndex, count = 3) {
       const schedTime = calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays);
       newTimes.push({
         scheduleTime: schedTime,
-        timeOnly: timeOnlyStr
+        timeOnly: timeOnlyStr,
+        durationHours: durH,
+        durationMinutes: durM,
+        streamDurationMinutes: durMins
       });
     } else {
       newTimes.push({
         scheduleTime: dtStr,
-        timeOnly: timeOnlyStr
+        timeOnly: timeOnlyStr,
+        durationHours: durH,
+        durationMinutes: durM,
+        streamDurationMinutes: durMins
       });
     }
 
@@ -10123,8 +10295,6 @@ function generateSmartChainedTimes(groupIndex, count = 3) {
     loadRecreateThumbnailRotationPreview();
   }
 
-  const durH = Math.floor(durMins / 60);
-  const durM = durMins % 60;
   const durLabel = durH > 0 ? (durM > 0 ? `${durH}j ${durM}m` : `${durH} jam`) : `${durM} mnt`;
   showToast(`Berhasil mengatur tayang ${targetCount}x sehari (Durasi: ${durLabel} + Jeda: ${gapMins}m)`, 'success');
 }
@@ -10139,6 +10309,8 @@ function addCustomTimeToGroup(groupIndex) {
   }
 
   const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const durH = Math.floor(durMins / 60);
+  const durM = durMins % 60;
   const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
   const stepMinutes = durMins + gapMins;
 
@@ -10154,11 +10326,13 @@ function addCustomTimeToGroup(groupIndex) {
 
   let nextDate;
   if (group.times.length > 0) {
-    const lastT = group.times[group.times.length - 1];
+    const lastIdx = group.times.length - 1;
+    const lastT = group.times[lastIdx];
+    const lastDurMins = getSlotDurationMinutes(groupIndex, lastIdx);
     if (lastT && lastT.scheduleTime) {
       const parsed = new Date(lastT.scheduleTime);
       if (!isNaN(parsed.getTime())) {
-        nextDate = new Date(parsed.getTime() + stepMinutes * 60 * 1000);
+        nextDate = new Date(parsed.getTime() + (lastDurMins + gapMins) * 60 * 1000);
       }
     }
   }
@@ -10177,7 +10351,10 @@ function addCustomTimeToGroup(groupIndex) {
 
   group.times.push({
     scheduleTime: schedTime,
-    timeOnly: timeOnlyStr
+    timeOnly: timeOnlyStr,
+    durationHours: durH,
+    durationMinutes: durM,
+    streamDurationMinutes: durMins
   });
   group.times.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
 
@@ -10215,61 +10392,12 @@ function autoFixSlotCollision(groupIndex, timeIndex) {
   const group = window.recreateBroadcastGroups[groupIndex];
   if (!group.times || !group.times[timeIndex] || timeIndex <= 0) return;
 
-  const durMins = getGroupStreamDurationMinutes(groupIndex);
-  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
-  const stepMinutes = durMins + gapMins;
-
-  const patternInput = document.getElementById('recreateRecurringPatternInput');
-  const patternVal = patternInput ? patternInput.value : 'none';
-  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
-
-  let selectedWeeklyDays = [];
-  if (patternVal === 'weekly') {
-    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
-    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
-  }
-
-  const prevT = group.times[timeIndex - 1];
-  let prevStart = null;
-  if (prevT.scheduleTime) {
-    const p = new Date(prevT.scheduleTime);
-    if (!isNaN(p.getTime())) prevStart = p;
-  }
-  if (!prevStart && prevT.timeOnly) {
-    const sched = calculateUpcomingDateTimeForSlot(prevT.timeOnly, patternVal, selectedWeeklyDays);
-    const p = new Date(sched);
-    if (!isNaN(p.getTime())) prevStart = p;
-  }
-  if (!prevStart) prevStart = new Date(Date.now() + 15 * 60 * 1000);
-
-  const safeDate = new Date(prevStart.getTime() + stepMinutes * 60 * 1000);
-  const dtStr = formatLocalDateTime(safeDate);
-  const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
-
-  group.times[timeIndex].scheduleTime = isRecurring
-    ? calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays)
-    : dtStr;
-  group.times[timeIndex].timeOnly = timeOnlyStr;
-
-  // Cascade shift any further slots
-  for (let k = timeIndex + 1; k < group.times.length; k++) {
-    const prior = group.times[k - 1];
-    const priorStart = new Date(prior.scheduleTime).getTime();
-    const currentSlotStart = new Date(group.times[k].scheduleTime).getTime();
-    if (isNaN(currentSlotStart) || currentSlotStart < priorStart + durMins * 60 * 1000) {
-      const newStart = new Date(priorStart + stepMinutes * 60 * 1000);
-      const newDt = formatLocalDateTime(newStart);
-      const newTimeOnly = newDt.includes('T') ? newDt.split('T')[1].slice(0, 5) : '13:00';
-      group.times[k].scheduleTime = isRecurring
-        ? calculateUpcomingDateTimeForSlot(newTimeOnly, patternVal, selectedWeeklyDays)
-        : newDt;
-      group.times[k].timeOnly = newTimeOnly;
-    }
-  }
+  autoAdjustSubsequentSlotsFrom(groupIndex, timeIndex - 1);
 
   syncRecreateSlotsFromGroups();
   renderRecreateSlotList();
-  showToast(`Jam Siaran #${timeIndex + 1} disesuaikan ke ${timeOnlyStr} (Jeda aman ${gapMins}m)`, 'success');
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+  showToast(`Jam Siaran #${timeIndex + 1} dan jadwal setelahnya berhasil disesuaikan (Jeda aman ${gapMins}m)`, 'success');
 }
 window.autoFixSlotCollision = autoFixSlotCollision;
 
@@ -10282,37 +10410,12 @@ function autoAlignAllGroupTimes(groupIndex) {
     return;
   }
 
-  const durMins = getGroupStreamDurationMinutes(groupIndex);
-  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
-  const stepMinutes = durMins + gapMins;
-
-  const patternInput = document.getElementById('recreateRecurringPatternInput');
-  const patternVal = patternInput ? patternInput.value : 'none';
-  const isRecurring = (patternVal === 'daily' || patternVal === 'weekly');
-
-  let selectedWeeklyDays = [];
-  if (patternVal === 'weekly') {
-    const checkedDays = Array.from(document.querySelectorAll('input[name="recreateWeeklyDays"]:checked')).map(cb => cb.value);
-    if (checkedDays.length > 0) selectedWeeklyDays = checkedDays;
-  }
-
-  for (let i = 1; i < group.times.length; i++) {
-    const priorSlot = group.times[i - 1];
-    const priorStart = new Date(priorSlot.scheduleTime).getTime();
-    const minSafeStart = new Date(priorStart + stepMinutes * 60 * 1000);
-
-    const thisStart = new Date(group.times[i].scheduleTime).getTime();
-    if (isNaN(thisStart) || thisStart < priorStart + durMins * 60 * 1000) {
-      const dtStr = formatLocalDateTime(minSafeStart);
-      const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
-      group.times[i].scheduleTime = isRecurring ? calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays) : dtStr;
-      group.times[i].timeOnly = timeOnlyStr;
-    }
-  }
+  autoAdjustSubsequentSlotsFrom(groupIndex, 0);
 
   syncRecreateSlotsFromGroups();
   renderRecreateSlotList();
-  showToast(`Semua jam siaran berhasil dirapikan dengan jeda aman ${gapMins} menit!`, 'success');
+  const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
+  showToast(`Semua jam siaran berhasil dirapikan berurutan dengan jeda aman ${gapMins} menit!`, 'success');
 }
 window.autoAlignAllGroupTimes = autoAlignAllGroupTimes;
 
@@ -10378,26 +10481,8 @@ function updateGroupSlotTime(groupIndex, timeIndex, value, isTimeOnly = false) {
         }
       }
 
-      const durMins = getGroupStreamDurationMinutes(groupIndex);
-      const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
-      const stepMinutes = durMins + gapMins;
-
-      // Auto-cascade shift any subsequent slots that would now collide with this slot
-      for (let k = timeIndex + 1; k < group.times.length; k++) {
-        const prior = group.times[k - 1];
-        const priorStart = new Date(prior.scheduleTime).getTime();
-        const currentSlotStart = new Date(group.times[k].scheduleTime).getTime();
-
-        if (isNaN(currentSlotStart) || currentSlotStart < priorStart + durMins * 60 * 1000) {
-          const newStart = new Date(priorStart + stepMinutes * 60 * 1000);
-          const newDt = formatLocalDateTime(newStart);
-          const newTimeOnly = newDt.includes('T') ? newDt.split('T')[1].slice(0, 5) : '13:00';
-          group.times[k].scheduleTime = isRecurring
-            ? calculateUpcomingDateTimeForSlot(newTimeOnly, pattern, selectedWeeklyDays)
-            : newDt;
-          group.times[k].timeOnly = newTimeOnly;
-        }
-      }
+      // Auto-adjust all subsequent slots from this slot forward!
+      autoAdjustSubsequentSlotsFrom(groupIndex, timeIndex);
 
       syncRecreateSlotsFromGroups();
       renderRecreateSlotList();
@@ -11222,6 +11307,16 @@ function saveRecreateSlotFullEdit() {
   group.durationMinutes = m;
   group.streamDurationMinutes = totalM;
   group.loopVideo = isLoop;
+
+  // Sync first slot duration and cascade downstream slots
+  if (Array.isArray(group.times) && group.times.length > 0) {
+    group.times[0].durationHours = h;
+    group.times[0].durationMinutes = m;
+    group.times[0].streamDurationMinutes = totalM;
+    if (group.times.length > 1) {
+      autoAdjustSubsequentSlotsFrom(groupIndex, 0);
+    }
+  }
 
   // Tutup modal, sinkronkan slot, dan refresh render tampilan card
   closeRecreateSlotEditModal();
@@ -12149,9 +12244,9 @@ if (recreateFromTemplateForm) {
               streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
               thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
               pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail || template.thumbnail_path || null,
-              durationHours: grp.durationHours,
-              durationMinutes: grp.durationMinutes,
-              streamDurationMinutes: grp.streamDurationMinutes,
+              durationHours: t.durationHours !== undefined ? t.durationHours : grp.durationHours,
+              durationMinutes: t.durationMinutes !== undefined ? t.durationMinutes : grp.durationMinutes,
+              streamDurationMinutes: t.streamDurationMinutes !== undefined ? t.streamDurationMinutes : grp.streamDurationMinutes,
               loopVideo: grp.loopVideo,
               videoId: grp.videoId || template.video_id || null,
               audioId: grp.audioId || template.audio_id || null,
@@ -12181,13 +12276,13 @@ if (recreateFromTemplateForm) {
       for (let gIdx = 0; gIdx < groups.length; gIdx++) {
         const grp = groups[gIdx];
         const times = grp.times || [];
-        const durMins = getGroupStreamDurationMinutes(gIdx);
         for (let tIdx = 1; tIdx < times.length; tIdx++) {
           const prevSlot = times[tIdx - 1];
           const curSlot = times[tIdx];
+          const prevDurMins = getSlotDurationMinutes(gIdx, tIdx - 1);
           const prevStart = new Date(prevSlot.scheduleTime).getTime();
           const curStart = new Date(curSlot.scheduleTime).getTime();
-          if (!isNaN(prevStart) && !isNaN(curStart) && curStart < prevStart + durMins * 60 * 1000) {
+          if (!isNaN(prevStart) && !isNaN(curStart) && curStart < prevStart + prevDurMins * 60 * 1000) {
             showToast(`Siaran #${gIdx + 1} memiliki jam yang bertabrakan (Jam ${tIdx + 1} bentrok dengan Jam ${tIdx}). Silakan klik "Rapikan Jeda" atau "Perbaiki".`, 'error');
             createBtn.innerHTML = originalText;
             createBtn.disabled = false;
