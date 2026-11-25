@@ -6413,8 +6413,12 @@ if (changeThumbnailForm) {
 document.querySelectorAll('.modal-overlay').forEach(modal => {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+      if (modal.id === 'recreateSlotEditModal' && typeof closeRecreateSlotEditModal === 'function') {
+        closeRecreateSlotEditModal();
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
     }
   });
 });
@@ -6422,6 +6426,11 @@ document.querySelectorAll('.modal-overlay').forEach(modal => {
 // Close modals on Escape key
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    const slotEditModal = document.getElementById('recreateSlotEditModal');
+    if (slotEditModal && !slotEditModal.classList.contains('hidden') && slotEditModal.style.display !== 'none' && typeof closeRecreateSlotEditModal === 'function') {
+      closeRecreateSlotEditModal();
+      return;
+    }
     document.querySelectorAll('.modal-overlay').forEach(modal => {
       modal.classList.add('hidden');
       modal.classList.remove('flex');
@@ -9242,7 +9251,7 @@ function openRecreateFromTemplateModal(template) {
       const bPrivacy = b.privacyStatus || b.privacy_status || template.privacy_status || template.privacyStatus || 'unlisted';
       const bTitleFolderId = (b.titleFolderId !== undefined ? b.titleFolderId : (b.title_folder_id !== undefined ? b.title_folder_id : (template.title_folder_id || null)));
       const bThumbFolder = b.thumbnailFolder !== undefined ? b.thumbnailFolder : template.thumbnail_folder;
-      const bPinnedThumb = b.pinnedThumbnail || (bThumbFolder ? null : (b.thumbnailPath || template.pinned_thumbnail || null));
+      const bPinnedThumb = b.pinnedThumbnail || template.pinned_thumbnail || null;
 
       // Calculate slot duration with smart resolution: slot own duration -> slot video duration -> fallback
       let bTotalMins = parseInt(b.streamDurationMinutes, 10) || (((parseInt(b.durationHours, 10) || 0) * 60) + (parseInt(b.durationMinutes, 10) || 0));
@@ -9345,7 +9354,7 @@ function openRecreateFromTemplateModal(template) {
     const singleTitleFolderId = template.title_folder_id || null;
 
     const sThumbFolder = template.thumbnail_folder !== undefined ? template.thumbnail_folder : null;
-    const sPinnedThumb = template.pinned_thumbnail || (!sThumbFolder ? (template.thumbnail_path || null) : null);
+    const sPinnedThumb = template.pinned_thumbnail || null;
 
     let finalSingleTotalMins = totalTemplateMins;
     let finalSingleHours = tHours;
@@ -9480,26 +9489,26 @@ function syncRecreateSlotsFromGroups() {
         window.recreateSlots.push({
           groupIndex: gIdx,
           timeIndex: tIdx,
-          title: group.title,
+          title: t.title !== undefined ? t.title : group.title,
           originalTitle: group.originalTitle,
-          streamId: group.streamId,
-          streamKey: group.streamKey,
-          thumbnailFolder: group.thumbnailFolder,
-          pinnedThumbnail: group.pinnedThumbnail,
-          thumbnailPath: group.thumbnailPath,
-          customTitle: group.customTitle,
-          useTitleRotation: group.useTitleRotation,
+          streamId: t.streamId !== undefined ? t.streamId : group.streamId,
+          streamKey: t.streamKey !== undefined ? t.streamKey : group.streamKey,
+          thumbnailFolder: t.thumbnailFolder !== undefined ? t.thumbnailFolder : group.thumbnailFolder,
+          pinnedThumbnail: t.pinnedThumbnail || group.pinnedThumbnail,
+          thumbnailPath: t.thumbnailPath || group.thumbnailPath,
+          customTitle: t.customTitle !== undefined ? t.customTitle : group.customTitle,
+          useTitleRotation: t.useTitleRotation !== undefined ? t.useTitleRotation : group.useTitleRotation,
           durationHours: t.durationHours !== undefined ? t.durationHours : group.durationHours,
           durationMinutes: t.durationMinutes !== undefined ? t.durationMinutes : group.durationMinutes,
           streamDurationMinutes: t.streamDurationMinutes !== undefined ? t.streamDurationMinutes : group.streamDurationMinutes,
-          loopVideo: group.loopVideo,
-          videoId: group.videoId,
-          videoName: group.videoName,
-          audioId: group.audioId,
-          audioName: group.audioName,
-          description: group.description,
-          privacyStatus: group.privacyStatus,
-          titleFolderId: group.titleFolderId,
+          loopVideo: t.loopVideo !== undefined ? t.loopVideo : group.loopVideo,
+          videoId: t.videoId || group.videoId,
+          videoName: t.videoName || group.videoName,
+          audioId: t.audioId || group.audioId,
+          audioName: t.audioName || group.audioName,
+          description: t.description !== undefined ? t.description : group.description,
+          privacyStatus: t.privacyStatus || group.privacyStatus,
+          titleFolderId: t.titleFolderId !== undefined ? t.titleFolderId : group.titleFolderId,
           scheduleTime: t.scheduleTime,
           timeOnly: t.timeOnly
         });
@@ -9676,207 +9685,14 @@ function renderRecreateSlotList() {
          </button>`
       : '';
 
-    const isEditingTitle = Boolean(group._isEditingTitle);
     const originalTitle = group.originalTitle || group.title || '';
-    const currentTitle = group.title || originalTitle;
-
-    // Check title rotation preview for this group's first slot
-    const isRotated = Boolean(group.useTitleRotation !== false && !group.customTitle && Array.isArray(window.recreateNextTitles) && window.recreateNextTitles[globalSlotOffset] && window.recreateNextTitles[globalSlotOffset].title);
-    const rotatedTitle = isRotated ? window.recreateNextTitles[globalSlotOffset].title : null;
-
-    // Check thumbnail rotation preview for this group's first slot
-    const rotatedThumb = (Array.isArray(window.recreateNextThumbnails) && window.recreateNextThumbnails[globalSlotOffset])
-      ? window.recreateNextThumbnails[globalSlotOffset]
-      : null;
-    const resolvedThumbFolder = (group.thumbnailFolder !== undefined && group.thumbnailFolder !== null && group.thumbnailFolder !== '__KEEP__')
-      ? (group.thumbnailFolder === '__ROOT__' ? '' : group.thumbnailFolder)
-      : (template.thumbnail_folder !== undefined ? template.thumbnail_folder : null);
-
-    let thumbnailBadgeHtml = '';
-    if (group.pinnedThumbnail) {
-      thumbnailBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 shadow-xs">
-          <i class="ti ti-pin text-xs"></i>
-          <span>Thumbnail Dipin</span>
-        </span>`;
-    } else if (rotatedThumb && rotatedThumb.filename) {
-      const folderLabel = resolvedThumbFolder || 'Root';
-      thumbnailBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-purple-300 bg-[#382654] border border-purple-500/25 truncate shadow-xs" title="Thumbnail Rotasi: Folder ${escapeHtml(folderLabel)} • Urutan #${rotatedThumb.currentIndex + 1} (${escapeHtml(rotatedThumb.filename)})">
-          <span class="truncate">${escapeHtml(folderLabel)}</span>
-        </span>`;
-    } else if (resolvedThumbFolder !== null && resolvedThumbFolder !== undefined && resolvedThumbFolder !== '') {
-      const folderLabel = resolvedThumbFolder || 'Root';
-      thumbnailBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-purple-300 bg-[#382654] border border-purple-500/25 truncate shadow-xs" title="Thumbnail: ${escapeHtml(folderLabel)}">
-          <span class="truncate">${escapeHtml(folderLabel)}</span>
-        </span>`;
-    }
-
-    const durH = parseInt(group.durationHours, 10) || 0;
-    const durM = parseInt(group.durationMinutes, 10) || 0;
-    const durTotal = group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((durH * 60) + durM);
-    const durStr = durTotal === 0 ? 'Unlimited' : (durH > 0 ? (durM > 0 ? `${durH}j ${durM}m` : `${durH}j`) : `${durM}m`);
-    const isLoop = group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : true;
-
-    const durationBadgeHtml = `
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#20293f] border border-gray-600/40 text-gray-300 flex-shrink-0 shadow-xs" title="Durasi siaran: ${durStr} • Loop: ${isLoop ? 'Aktif' : 'Mati'}">
-        <i class="ti ti-clock text-xs text-gray-400"></i>
-        <span>${durStr}</span>
-      </span>`;
-
-    let videoBadgeHtml = '';
-    const resolvedVidId = group.videoId || template.video_id;
-    if (resolvedVidId) {
-      const vidName = group.videoName || getStudioVideoName(resolvedVidId);
-      videoBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-rose-300 bg-[#3d202d] border border-rose-500/25 truncate max-w-[180px] shadow-xs" title="Video: ${escapeHtml(vidName)}">
-          <span class="truncate">${escapeHtml(vidName)}</span>
-        </span>`;
-    }
-
-    let audioBadgeHtml = '';
-    const resolvedAudId = group.audioId || template.audio_id;
-    if (resolvedAudId) {
-      const audName = group.audioName || getStudioAudioName(resolvedAudId);
-      audioBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-pink-300 bg-pink-500/15 border border-pink-500/30 truncate max-w-[150px] shadow-xs" title="Audio: ${escapeHtml(audName)}">
-          <i class="ti ti-music text-xs text-pink-400 flex-shrink-0"></i>
-          <span class="truncate">${escapeHtml(audName)}</span>
-        </span>`;
-    }
-
-    // Title Folder badge (Pill 1)
-    let titleFolderBadgeHtml = '';
-    const resolvedTitleFolderId = group.titleFolderId !== undefined && group.titleFolderId !== '__KEEP__'
-      ? group.titleFolderId
-      : (template.title_folder_id || null);
-
-    let titleFolderName = '';
-    if (resolvedTitleFolderId && Array.isArray(window.titleFolders)) {
-      const tf = window.titleFolders.find(f => String(f.id) === String(resolvedTitleFolderId));
-      if (tf) titleFolderName = tf.name;
-    }
-    if (!titleFolderName && group.titleFolderName) {
-      titleFolderName = group.titleFolderName;
-    }
-    if (!titleFolderName && template.title_folder_name) {
-      titleFolderName = template.title_folder_name;
-    }
-    if (!titleFolderName && template.title_folder) {
-      titleFolderName = template.title_folder;
-    }
-
-    if (titleFolderName) {
-      titleFolderBadgeHtml = `
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-gray-300 bg-[#20293f] border border-gray-600/40 shadow-xs" title="Folder Judul: ${escapeHtml(titleFolderName)}">
-          <i class="ti ti-folder text-xs text-gray-400"></i>
-          <span class="truncate">${escapeHtml(titleFolderName)}</span>
-        </span>`;
-    }
-
-    let titleContentHtml = '';
-    if (isEditingTitle) {
-      titleContentHtml = `
-        <div class="space-y-3 w-full">
-          <div class="flex items-center gap-3">
-            <div class="w-12 h-12 rounded-xl bg-[#523b7a] border border-purple-400/30 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-inner">
-              ${String(groupIndex + 1).padStart(2, '0')}
-            </div>
-            <div class="flex-1 min-w-0">
-              <label class="text-[11px] font-semibold text-gray-300 block mb-1">Edit Judul Siaran #${groupIndex + 1}:</label>
-              <input type="text" id="groupTitleInput_${groupIndex}" value="${escapeHtml(group.title || '')}"
-                class="w-full h-9 px-3 bg-dark-600 border border-primary rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="Masukkan judul siaran..."
-                onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateGroupTitle(${groupIndex})}else if(event.key==='Escape'){event.preventDefault();cancelEditRecreateGroupTitle(${groupIndex})}">
-            </div>
-          </div>
-          <div class="flex items-center justify-end gap-2">
-            <button type="button" onclick="cancelEditRecreateGroupTitle(${groupIndex})" class="h-8 px-3.5 bg-dark-600 hover:bg-dark-500 text-gray-300 border border-gray-600 rounded-xl text-xs font-semibold transition-colors active:scale-95 cursor-pointer">
-              Batal
-            </button>
-            <button type="button" onclick="saveRecreateGroupTitle(${groupIndex})" class="h-8 px-4 bg-primary hover:bg-primary-focus text-white rounded-xl text-xs font-bold transition-colors active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-sm">
-              <i class="ti ti-check text-xs"></i>
-              <span>Simpan Judul</span>
-            </button>
-          </div>
-        </div>`;
-    } else {
-      let titleDisplayMain = '';
-      if (group.customTitle) {
-        titleDisplayMain = `
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2">${escapeHtml(group.title)}</span>
-            <span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded font-normal flex-shrink-0">Kustom</span>
-          </div>`;
-      } else if (isRotated) {
-        titleDisplayMain = `
-          <div class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2 flex items-center gap-1.5" title="Judul dari Rotasi Judul">
-            <i class="ti ti-rotate-clockwise text-xs text-primary flex-shrink-0"></i>
-            <span>${escapeHtml(rotatedTitle)}</span>
-          </div>`;
-      } else {
-        titleDisplayMain = `
-          <div class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2" title="${escapeHtml(currentTitle)}">
-            ${escapeHtml(currentTitle)}
-          </div>`;
-      }
-
-      titleContentHtml = `
-        <div class="space-y-3 w-full">
-          <!-- Line 1: [ 01 ] + Judul & Asli + [ ••• ] -->
-          <div class="flex items-start gap-3 w-full">
-            <div class="w-12 h-12 rounded-xl bg-[#523b7a] border border-purple-400/30 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-inner mt-0.5">
-              ${String(groupIndex + 1).padStart(2, '0')}
-            </div>
-            <div class="min-w-0 flex-1">
-              ${titleDisplayMain}
-              <div class="text-xs text-gray-400 truncate mt-0.5" title="Asli: ${escapeHtml(originalTitle)}">
-                Asli: <span class="text-gray-400">${escapeHtml(originalTitle)}</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-1 flex-shrink-0 ml-1">
-              <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
-                class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                title="Pilihan & Pengaturan Siaran #${groupIndex + 1}">
-                <i class="ti ti-dots text-lg"></i>
-              </button>
-              ${deleteGroupBtn}
-            </div>
-          </div>
-
-          <!-- Line 2: Badges Row (Folder, Thumbnail, Video, Durasi) -->
-          <div class="flex items-center gap-2 flex-wrap pt-0.5">
-            ${titleFolderBadgeHtml}
-            ${thumbnailBadgeHtml}
-            ${videoBadgeHtml}
-            ${audioBadgeHtml}
-            ${durationBadgeHtml}
-          </div>
-
-          <!-- Line 3: Tombol Aksi (Edit Full dan Edit Judul Ukuran Sama Rata) -->
-          <div class="grid grid-cols-2 gap-2.5 w-full pt-1">
-            <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex})"
-              class="h-12 bg-[#204373] hover:bg-[#28528c] text-blue-200 border border-blue-400/30 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
-              title="Edit Full Siaran #${groupIndex + 1}: Judul, Rotasi, Thumbnail, Stream Key, Media & Durasi">
-              <i class="ti ti-pencil text-sm text-blue-200"></i>
-              <span>Edit Full</span>
-            </button>
-            <button type="button" onclick="editRecreateGroupTitle(${groupIndex})"
-              class="h-12 bg-[#2a344d] hover:bg-[#344161] text-gray-200 border border-gray-600/40 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
-              title="Edit judul siaran #${groupIndex + 1}">
-              <i class="ti ti-typography text-sm text-gray-200"></i>
-              <span>Edit Judul</span>
-            </button>
-          </div>
-        </div>`;
-    }
-
-    // Render scheduled times for this group
-    const groupDurMins = getGroupStreamDurationMinutes(groupIndex);
+    const activeDurMins = (group.times && group.times.length > 0)
+      ? getSlotDurationMinutes(groupIndex, group.times.length - 1)
+      : getGroupStreamDurationMinutes(groupIndex);
     const groupGapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
 
     const timesHtml = (group.times || []).map((t, timeIndex) => {
+      const slotGlobalIdx = globalSlotOffset + timeIndex;
       const canDeleteTime = (group.times || []).length > 1;
       const deleteTimeBtn = canDeleteTime
         ? `<button type="button" onclick="removeTimeFromGroup(${groupIndex}, ${timeIndex})"
@@ -9977,72 +9793,135 @@ function renderRecreateSlotList() {
       const slotDurText = formatDurationLabel(slotDurMins);
       const slotNumStr = String(timeIndex + 1).padStart(2, '0');
 
-      if (isEditingCard) {
-        // Expanded editing mode inside the card
-        return `
-          <div class="bg-[#131a31] border-2 border-primary/60 rounded-2xl p-4 shadow-xl space-y-3.5 transition-all w-full">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="text-base font-bold text-white tracking-wide">Jadwal ${slotNumStr}</span>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/20 border border-primary/40 text-primary">
-                  <i class="ti ti-pencil text-xs"></i> Mode Edit
-                </span>
-              </div>
-              <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})" class="text-gray-400 hover:text-white p-1" title="Tutup edit">
-                <i class="ti ti-x text-sm"></i>
-              </button>
-            </div>
+      // Title & Title Rotation resolution for this exact slot
+      const isSlotRotated = Boolean(
+        t.useTitleRotation !== false && 
+        !t.customTitle && 
+        group.useTitleRotation !== false && 
+        !group.customTitle &&
+        Array.isArray(window.recreateNextTitles) && 
+        window.recreateNextTitles[slotGlobalIdx] && 
+        window.recreateNextTitles[slotGlobalIdx].title
+      );
+      const slotRotatedTitle = isSlotRotated ? window.recreateNextTitles[slotGlobalIdx].title : null;
+      const isSlotCustom = Boolean(t.customTitle && t.title);
+      const currentSlotTitle = isSlotCustom 
+        ? t.title 
+        : (slotRotatedTitle || t.title || (timeIndex === 0 ? group.title : null) || originalTitle);
 
-            <!-- Form Edit Waktu & Durasi -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[#243053]/80">
-              <div class="space-y-1">
-                <label class="text-[11px] text-gray-400 font-semibold flex items-center gap-1">
-                  <i class="ti ti-calendar-time text-xs text-primary"></i> Waktu Mulai:
-                </label>
-                ${isRecurring ? `
-                  <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeOnlyVal}"
-                    onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
-                    class="w-full h-9 px-3 bg-[#182138] hover:bg-[#1e2a47] border border-gray-600 focus:border-primary rounded-xl text-xs font-bold text-white text-center [color-scheme:dark] transition-colors">
-                ` : `
-                  <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
-                    onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
-                    class="w-full h-9 px-3 bg-[#182138] hover:bg-[#1e2a47] border border-gray-600 focus:border-primary rounded-xl text-xs font-bold text-white [color-scheme:dark] transition-colors">
-                `}
-              </div>
+      // Title folder resolution
+      const resolvedFolderId = (t.titleFolderId !== undefined && t.titleFolderId !== null && t.titleFolderId !== '__KEEP__')
+        ? t.titleFolderId
+        : ((group.titleFolderId !== undefined && group.titleFolderId !== null && group.titleFolderId !== '__KEEP__')
+           ? group.titleFolderId
+           : (template.title_folder_id || null));
+      let folderName = '';
+      if (resolvedFolderId && Array.isArray(window.titleFolders)) {
+        const f = window.titleFolders.find(x => String(x.id) === String(resolvedFolderId));
+        if (f) folderName = f.name;
+      }
+      if (!folderName && template.title_folder_name) folderName = template.title_folder_name;
+      const titleFolderBadgeHtml = folderName ? `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-purple-300 bg-purple-500/15 border border-purple-500/30 shadow-xs"
+              title="Folder Rotasi Judul: ${escapeHtml(folderName)}">
+          <i class="ti ti-folder text-xs text-purple-400"></i>
+          <span class="truncate max-w-[130px] sm:max-w-[180px]">${escapeHtml(folderName)}</span>
+        </span>` : `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-purple-300 bg-purple-500/15 border border-purple-500/30 shadow-xs">
+          <i class="ti ti-folder text-xs text-purple-400"></i>
+          <span>Rotasi Judul</span>
+        </span>`;
 
-              <div class="space-y-1">
-                <label class="text-[11px] text-gray-400 font-semibold flex items-center gap-1">
-                  <i class="ti ti-clock text-xs text-amber-400"></i> Durasi Siaran:
-                </label>
-                <div class="flex items-center gap-1.5 h-9 bg-[#182138] px-3 rounded-xl border border-gray-600">
-                  <input type="number" min="0" max="24" value="${slotDurH}"
-                    onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, this.value, null)"
-                    class="w-10 h-7 text-center bg-dark-700 hover:bg-dark-600 border border-gray-500 focus:border-primary rounded-lg text-xs font-bold text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                  <span class="text-xs text-gray-400 font-medium">jam</span>
-                  <input type="number" min="0" max="59" value="${slotDurM}"
-                    onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, null, this.value)"
-                    class="w-10 h-7 text-center bg-dark-700 hover:bg-dark-600 border border-gray-500 focus:border-primary rounded-lg text-xs font-bold text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                  <span class="text-xs text-gray-400 font-medium">mnt</span>
-                </div>
-              </div>
-            </div>
+      // Thumbnail resolution for this slot
+      const rotatedThumb = (Array.isArray(window.recreateNextThumbnails) && window.recreateNextThumbnails[slotGlobalIdx])
+        ? window.recreateNextThumbnails[slotGlobalIdx]
+        : null;
+      const resolvedThumbFolder = (t.thumbnailFolder !== undefined && t.thumbnailFolder !== null && t.thumbnailFolder !== '__KEEP__')
+        ? (t.thumbnailFolder === '__ROOT__' ? '' : t.thumbnailFolder)
+        : ((group.thumbnailFolder !== undefined && group.thumbnailFolder !== null && group.thumbnailFolder !== '__KEEP__')
+           ? (group.thumbnailFolder === '__ROOT__' ? '' : group.thumbnailFolder)
+           : (template.thumbnail_folder !== undefined ? template.thumbnail_folder : null));
 
-            <!-- Footer Edit Mode -->
-            <div class="flex items-center justify-between pt-2 border-t border-[#243053]/60">
-              <span class="text-xs text-gray-400 font-mono">Estimasi: <strong class="text-white">${estRangeStr}</strong></span>
-              <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})"
-                class="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer">
-                <i class="ti ti-check text-xs"></i>
-                <span>Selesai</span>
-              </button>
-            </div>
-          </div>
-        `;
+      let thumbnailBadgeHtml = '';
+      const pinnedPath = t.pinnedThumbnail || group.pinnedThumbnail;
+      if (pinnedPath) {
+        let pinName = 'Dipin';
+        if (typeof pinnedPath === 'string') {
+          const base = pinnedPath.split(/[\/\\]/).pop();
+          if (base) pinName = base;
+        } else if (t.thumbnailPath || group.thumbnailPath) {
+          const base = (t.thumbnailPath || group.thumbnailPath).split(/[\/\\]/).pop();
+          if (base) pinName = base;
+        }
+        thumbnailBadgeHtml = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 shadow-xs"
+                title="Thumbnail Dipin (Tetap pada pilihan, tidak rotasi): ${escapeHtml(pinName)}">
+            <i class="ti ti-pin text-xs text-amber-400"></i>
+            <span class="truncate max-w-[130px] sm:max-w-[180px]">Dipin: ${escapeHtml(pinName)}</span>
+          </span>`;
+      } else if (rotatedThumb && rotatedThumb.filename) {
+        const folderLabel = resolvedThumbFolder || 'Root';
+        thumbnailBadgeHtml = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 shadow-xs"
+                title="Rotasi Thumbnail: ${escapeHtml(rotatedThumb.filename)} (Folder: ${escapeHtml(folderLabel)})">
+            <i class="ti ti-photo text-xs text-blue-400"></i>
+            <span class="truncate max-w-[130px] sm:max-w-[180px]">${escapeHtml(folderLabel)}: ${escapeHtml(rotatedThumb.filename)}</span>
+          </span>`;
+      } else if (resolvedThumbFolder !== null && resolvedThumbFolder !== undefined) {
+        const folderLabel = resolvedThumbFolder || 'Root';
+        thumbnailBadgeHtml = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 shadow-xs"
+                title="Folder Thumbnail: ${escapeHtml(folderLabel)}">
+            <i class="ti ti-photo text-xs text-blue-400"></i>
+            <span>${escapeHtml(folderLabel)}</span>
+          </span>`;
       }
 
-      // Default Display Mode - 100% Mockup Matching
+      // Video & Audio badges
+      const vidName = t.videoName || group.videoName || template.video_title || template.video_name || (t.videoId ? `Video #${t.videoId}` : (group.videoId ? `Video #${group.videoId}` : ''));
+      const videoBadgeHtml = vidName ? `
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 shadow-xs truncate max-w-[150px]" title="Video: ${escapeHtml(vidName)}">
+          <i class="ti ti-video text-xs text-indigo-400"></i>
+          <span class="truncate">${escapeHtml(vidName)}</span>
+        </span>` : '';
+
+      const audName = t.audioName || group.audioName || template.audio_name || (t.audioId ? `Audio #${t.audioId}` : (group.audioId ? `Audio #${group.audioId}` : ''));
+      const audioBadgeHtml = audName ? `
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-teal-300 bg-teal-500/15 border border-teal-500/30 shadow-xs truncate max-w-[150px]" title="Audio: ${escapeHtml(audName)}">
+          <i class="ti ti-music text-xs text-teal-400"></i>
+          <span class="truncate">${escapeHtml(audName)}</span>
+        </span>` : '';
+
+      const durationBadgeHtml = `
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 shadow-xs" title="Durasi Siaran: ${slotDurText}">
+          <i class="ti ti-clock text-xs text-amber-400"></i>
+          <span>${slotDurText}</span>
+        </span>`;
+
+      // Title header display
+      let titleDisplayMain = '';
+      if (isSlotCustom) {
+        titleDisplayMain = `
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2">${escapeHtml(currentSlotTitle)}</span>
+            <span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded font-normal flex-shrink-0">Kustom</span>
+          </div>`;
+      } else if (isSlotRotated) {
+        titleDisplayMain = `
+          <div class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2 flex items-center gap-1.5" title="Judul dari Rotasi Judul">
+            <i class="ti ti-rotate-clockwise text-xs text-primary flex-shrink-0"></i>
+            <span>${escapeHtml(currentSlotTitle)}</span>
+          </div>`;
+      } else {
+        titleDisplayMain = `
+          <div class="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2" title="${escapeHtml(currentSlotTitle)}">
+            ${escapeHtml(currentSlotTitle)}
+          </div>`;
+      }
+
+      // Complete Full Broadcast Card Layout for each schedule slot
       return `
-        <div class="bg-[#131a31] border border-[#243053] rounded-2xl p-4 shadow-md space-y-3.5 transition-all hover:border-[#354675] w-full">
+        <div class="bg-[#131a31] border border-[#243053] rounded-2xl p-3.5 sm:p-4 shadow-md space-y-3.5 transition-all hover:border-[#354675] w-full">
           <!-- Hidden inputs for backend submission -->
           ${isRecurring ? `
             <input type="hidden" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" value="${timeOnlyVal}">
@@ -10050,75 +9929,193 @@ function renderRecreateSlotList() {
             <input type="hidden" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" value="${t.scheduleTime || ''}">
           `}
 
-          <!-- Header Card: Jadwal 01 + Badge Aktif / Bentrok + ⋮ Menu -->
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-base font-bold text-white tracking-wide">Jadwal ${slotNumStr}</span>
-              ${isColliding ? gapBadgeHtml : `
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  <span>Aktif</span>
-                </span>
-                ${gapBadgeHtml}
-              `}
+          <!-- Line 1: [ 01 ] + Judul & Asli + [ ••• ] Menu & Hapus (Mockup Matching) -->
+          <div class="flex items-start gap-3 w-full">
+            <div class="w-12 h-12 rounded-xl bg-[#523b7a] border border-purple-400/30 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-inner mt-0.5">
+              ${slotNumStr}
             </div>
-            <div class="text-gray-400 hover:text-white cursor-pointer p-1" title="Pilihan Jadwal" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
-              <i class="ti ti-dots-vertical text-base"></i>
-            </div>
-          </div>
-
-          <!-- 3-Column Info Grid: Pengulangan | Durasi | Waktu Mulai -->
-          <div class="grid grid-cols-3 divide-x divide-[#243053] py-2 border-y border-[#243053]/80">
-            <!-- Col 1: Pengulangan -->
-            <div class="px-2 sm:px-3 py-1 space-y-1">
-              <div class="flex items-center gap-1.5 text-gray-400 text-xs">
-                <i class="ti ti-repeat text-sm text-gray-400"></i>
-                <span class="text-[11px]">Pengulangan</span>
-              </div>
-              <div class="text-sm sm:text-base font-bold text-white capitalize">
-                ${repeatText}
+            <div class="min-w-0 flex-1">
+              ${titleDisplayMain}
+              <div class="text-xs text-gray-400 truncate mt-0.5" title="Asli: ${escapeHtml(originalTitle)}">
+                Asli: <span class="text-gray-400">${escapeHtml(originalTitle)}</span>
               </div>
             </div>
-
-            <!-- Col 2: Durasi -->
-            <div class="px-2 sm:px-3 py-1 space-y-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors" title="Klik untuk edit durasi" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
-              <div class="flex items-center gap-1.5 text-gray-400 text-xs">
-                <i class="ti ti-clock text-sm text-gray-400"></i>
-                <span class="text-[11px]">Durasi</span>
-              </div>
-              <div class="text-sm sm:text-base font-bold text-white">
-                ${slotDurText}
-              </div>
-            </div>
-
-            <!-- Col 3: Waktu Mulai -->
-            <div class="px-2 sm:px-3 py-1 space-y-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors" title="Klik untuk edit waktu mulai" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
-              <div class="flex items-center gap-1.5 text-gray-400 text-xs">
-                <i class="ti ti-calendar-time text-sm text-gray-400"></i>
-                <span class="text-[11px]">Waktu mulai</span>
-              </div>
-              <div class="text-sm sm:text-base font-bold text-white tracking-wider">
-                ${timeOnlyVal}
-              </div>
-            </div>
-          </div>
-
-          <!-- Card Footer: Tanggal + Tombol Edit & Hapus -->
-          <div class="flex items-center justify-between pt-0.5 flex-wrap gap-2">
-            <div class="flex items-center gap-2 text-xs text-gray-300 font-medium">
-              <i class="ti ti-calendar text-gray-400 text-sm flex-shrink-0"></i>
-              <span class="truncate">${fullDateStr}</span>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})"
-                class="h-8 px-3.5 bg-[#1a2645] hover:bg-[#23335c] text-blue-300 hover:text-white border border-blue-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
-                title="Edit jadwal ini">
-                <i class="ti ti-pencil text-xs"></i>
-                <span>Edit</span>
+            <div class="flex items-center gap-1 flex-shrink-0 ml-1">
+              <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex}, ${timeIndex})"
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                title="Edit Full Jadwal #${timeIndex + 1}">
+                <i class="ti ti-dots text-lg"></i>
               </button>
               ${deleteTimeBtn}
             </div>
           </div>
+
+          <!-- Line 2: Badges Row (Folder, Thumbnail, Video, Audio, Durasi, Bentrok) -->
+          <div class="flex items-center gap-2 flex-wrap pt-0.5">
+            ${isColliding ? gapBadgeHtml : `
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Aktif</span>
+              </span>
+              ${gapBadgeHtml}
+            `}
+            ${titleFolderBadgeHtml}
+            ${thumbnailBadgeHtml}
+            ${videoBadgeHtml}
+            ${audioBadgeHtml}
+            ${durationBadgeHtml}
+          </div>
+
+          <!-- Line 3: Tombol Aksi (Edit Full dan Edit Judul Ukuran Sama Rata) -->
+          <div class="grid grid-cols-2 gap-2.5 w-full pt-1">
+            <button type="button" onclick="openRecreateGroupFullEditor(${groupIndex}, ${timeIndex})"
+              class="h-11 sm:h-12 bg-[#204373] hover:bg-[#28528c] text-blue-200 border border-blue-400/30 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
+              title="Edit Full Jadwal #${timeIndex + 1}: Judul, Rotasi, Thumbnail, Stream Key, Media & Durasi">
+              <i class="ti ti-pencil text-sm text-blue-200"></i>
+              <span>Edit Full</span>
+            </button>
+            <button type="button" onclick="editRecreateSlotTitle(${groupIndex}, ${timeIndex})"
+              class="h-11 sm:h-12 bg-[#2a344d] hover:bg-[#344161] text-gray-200 border border-gray-600/40 rounded-xl text-xs font-semibold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
+              title="Edit judul jadwal #${timeIndex + 1}">
+              <i class="ti ti-typography text-sm text-gray-200"></i>
+              <span>Edit Judul</span>
+            </button>
+          </div>
+
+          <!-- Inline Title Editor (if active for this slot) -->
+          ${t._isEditingTitle ? `
+            <div class="p-3 bg-[#182138] rounded-xl border border-primary/50 space-y-2 mt-2">
+              <label class="text-[11px] font-semibold text-gray-300 flex items-center gap-1.5">
+                <i class="ti ti-typography text-xs text-primary"></i> Edit Judul Jadwal #${timeIndex + 1}:
+              </label>
+              <input type="text" id="slotTitleInput_${groupIndex}_${timeIndex}"
+                value="${escapeHtml(currentSlotTitle)}"
+                placeholder="Ketik judul kustom untuk jadwal ini..."
+                class="w-full h-9 px-3 bg-[#0f1424] border border-gray-600 focus:border-primary rounded-xl text-xs font-semibold text-white transition-colors"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();saveRecreateSlotTitle(${groupIndex}, ${timeIndex});}else if(event.key==='Escape'){cancelEditRecreateSlotTitle(${groupIndex}, ${timeIndex});}">
+              
+              <div class="flex items-center justify-between pt-1">
+                <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-400 cursor-pointer">
+                  <input type="checkbox" id="slotTitleRotToggle_${groupIndex}_${timeIndex}"
+                    class="rounded border-gray-600 text-primary focus:ring-0 w-3.5 h-3.5 bg-dark-700"
+                    ${t.useTitleRotation !== false && !t.customTitle ? 'checked' : ''}>
+                  <span>Gunakan rotasi otomatis</span>
+                </label>
+                <div class="flex items-center gap-2">
+                  <button type="button" onclick="cancelEditRecreateSlotTitle(${groupIndex}, ${timeIndex})"
+                    class="h-7 px-2.5 text-xs text-gray-400 hover:text-white bg-transparent hover:bg-white/5 rounded-lg transition-colors cursor-pointer">
+                    Batal
+                  </button>
+                  <button type="button" onclick="saveRecreateSlotTitle(${groupIndex}, ${timeIndex})"
+                    class="h-7 px-3 bg-primary hover:bg-primary-focus text-white rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1 shadow-sm">
+                    <i class="ti ti-check text-xs"></i>
+                    <span>Simpan</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Form Edit Waktu & Durasi (if inline edit is active) -->
+          ${isEditingCard ? `
+            <div class="bg-[#182138] border border-primary/50 rounded-xl p-3 space-y-3 mt-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="space-y-1">
+                  <label class="text-[11px] text-gray-400 font-semibold flex items-center gap-1">
+                    <i class="ti ti-calendar-time text-xs text-primary"></i> Waktu Mulai:
+                  </label>
+                  ${isRecurring ? `
+                    <input type="time" id="group_${groupIndex}_time_${timeIndex}" name="groupTime_${groupIndex}[]" required value="${timeOnlyVal}"
+                      onchange="updateGroupSlotTime(${groupIndex}, ${timeIndex}, this.value, true)"
+                      class="w-full h-9 px-3 bg-[#0f1424] hover:bg-[#151c33] border border-gray-600 focus:border-primary rounded-xl text-xs font-bold text-white text-center [color-scheme:dark] transition-colors">
+                  ` : `
+                    <input type="datetime-local" id="group_${groupIndex}_datetime_${timeIndex}" name="groupDateTime_${groupIndex}[]" required min="${minDateStr}" value="${t.scheduleTime || ''}"
+                      onchange="handleRecreateDateTimeChange(${groupIndex}, ${timeIndex}, this)"
+                      class="w-full h-9 px-3 bg-[#0f1424] hover:bg-[#151c33] border border-gray-600 focus:border-primary rounded-xl text-xs font-bold text-white [color-scheme:dark] transition-colors">
+                  `}
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-[11px] text-gray-400 font-semibold flex items-center gap-1">
+                    <i class="ti ti-clock text-xs text-amber-400"></i> Durasi Siaran:
+                  </label>
+                  <div class="flex items-center gap-1.5 h-9 bg-[#0f1424] px-3 rounded-xl border border-gray-600">
+                    <input type="number" min="0" max="24" value="${slotDurH}"
+                      onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, this.value, null)"
+                      class="w-10 h-7 text-center bg-dark-700 hover:bg-dark-600 border border-gray-500 focus:border-primary rounded-lg text-xs font-bold text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    <span class="text-xs text-gray-400 font-medium">jam</span>
+                    <input type="number" min="0" max="59" value="${slotDurM}"
+                      onchange="updateGroupSlotDuration(${groupIndex}, ${timeIndex}, null, this.value)"
+                      class="w-10 h-7 text-center bg-dark-700 hover:bg-dark-600 border border-gray-500 focus:border-primary rounded-lg text-xs font-bold text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    <span class="text-xs text-gray-400 font-medium">mnt</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Footer Edit Mode -->
+              <div class="flex items-center justify-between pt-2 border-t border-[#243053]/60">
+                <span class="text-xs text-gray-400 font-mono">Estimasi: <strong class="text-white">${estRangeStr}</strong></span>
+                <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})"
+                  class="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer">
+                  <i class="ti ti-check text-xs"></i>
+                  <span>Selesai</span>
+                </button>
+              </div>
+            </div>
+          ` : `
+            <!-- 3-Column Info Grid: Pengulangan | Durasi | Waktu Mulai (Mockup Matching) -->
+            <div class="grid grid-cols-3 divide-x divide-[#243053] py-2 border-y border-[#243053]/80">
+              <!-- Col 1: Pengulangan -->
+              <div class="px-2 sm:px-3 py-1 space-y-1">
+                <div class="flex items-center gap-1.5 text-gray-400 text-xs">
+                  <i class="ti ti-repeat text-sm text-gray-400"></i>
+                  <span class="text-[11px]">Pengulangan</span>
+                </div>
+                <div class="text-sm sm:text-base font-bold text-white capitalize">
+                  ${repeatText}
+                </div>
+              </div>
+
+              <!-- Col 2: Durasi -->
+              <div class="px-2 sm:px-3 py-1 space-y-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors" title="Klik untuk edit durasi" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
+                <div class="flex items-center gap-1.5 text-gray-400 text-xs">
+                  <i class="ti ti-clock text-sm text-gray-400"></i>
+                  <span class="text-[11px]">Durasi</span>
+                </div>
+                <div class="text-sm sm:text-base font-bold text-white">
+                  ${slotDurText}
+                </div>
+              </div>
+
+              <!-- Col 3: Waktu Mulai -->
+              <div class="px-2 sm:px-3 py-1 space-y-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors" title="Klik untuk edit waktu mulai" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})">
+                <div class="flex items-center gap-1.5 text-gray-400 text-xs">
+                  <i class="ti ti-calendar-time text-sm text-gray-400"></i>
+                  <span class="text-[11px]">Waktu mulai</span>
+                </div>
+                <div class="text-sm sm:text-base font-bold text-white tracking-wider">
+                  ${timeOnlyVal}
+                </div>
+              </div>
+            </div>
+
+            <!-- Card Footer: Tanggal + Tombol Edit Waktu & Hapus (Mockup Matching) -->
+            <div class="flex items-center justify-between pt-0.5 flex-wrap gap-2">
+              <div class="flex items-center gap-2 text-xs text-gray-300 font-medium">
+                <i class="ti ti-calendar text-gray-400 text-sm flex-shrink-0"></i>
+                <span class="truncate">${fullDateStr}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button type="button" onclick="toggleEditSlotCard(${groupIndex}, ${timeIndex})"
+                  class="h-8 px-3.5 bg-[#1a2645] hover:bg-[#23335c] text-blue-300 hover:text-white border border-blue-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                  title="Edit waktu dan durasi jadwal ini">
+                  <i class="ti ti-pencil text-xs"></i>
+                  <span>Edit Waktu</span>
+                </button>
+                ${deleteTimeBtn}
+              </div>
+            </div>
+          `}
         </div>
       `;
     }).join('');
@@ -10127,12 +10124,16 @@ function renderRecreateSlotList() {
 
     return `
       <div id="groupCard_${groupIndex}" class="space-y-3">
-        <!-- Card 1: Header Siaran & Aksi (100% Mockup Matching) -->
-        <div class="bg-[#1a2234] border border-[#2b354d] rounded-2xl p-3.5 sm:p-4 shadow-md space-y-3">
-          ${titleContentHtml}
-        </div>
+        ${canDeleteGroup ? `
+          <div class="flex items-center justify-between text-xs text-gray-400 font-semibold px-1">
+            <span class="flex items-center gap-1.5 text-gray-300">
+              <i class="ti ti-broadcast text-primary"></i> Siaran #${groupIndex + 1}
+            </span>
+            ${deleteGroupBtn}
+          </div>
+        ` : ''}
 
-        <!-- Card 2: Sub-kontainer Jam Tayang Bertingkat Khusus Siaran Ini (Mockup Matching) -->
+        <!-- Sub-kontainer Jam Tayang Bertingkat (Mockup Matching) -->
         <div class="bg-[#0d1222]/95 rounded-2xl p-3.5 sm:p-4 border border-[#1f2845] space-y-4 shadow-xl">
           <!-- 1. Header Jam Tayang Siaran + Tombol Tambah Jam -->
           <div class="flex items-center justify-between gap-3 pb-3 border-b border-[#1f2845]">
@@ -10165,7 +10166,7 @@ function renderRecreateSlotList() {
             </span>
           </div>
 
-          <!-- 3. List Schedule Cards -->
+          <!-- 3. List Schedule Cards (Each is complete full layout!) -->
           <div class="space-y-3">
             ${timesHtml}
           </div>
@@ -10195,8 +10196,9 @@ function renderRecreateSlotList() {
                   <i class="ti ti-clock text-lg"></i>
                 </div>
                 <div class="min-w-0 flex-1">
-                  <span class="text-[11px] text-gray-400 font-medium block leading-tight">Durasi</span>
-                  <span class="text-xs sm:text-sm font-bold text-white block truncate mt-0.5">${formatDurationLabel(groupDurMins)}</span>
+                  <span class="text-[11px] text-gray-400 font-medium block leading-tight">Durasi Siaran</span>
+                  <span class="text-xs sm:text-sm font-bold text-white block truncate mt-0.5">${formatDurationLabel(activeDurMins)}</span>
+                  <span class="text-[10px] text-gray-400 block truncate mt-0.5">+ Jeda ${groupGapMins}m (Siklus ${formatDurationLabel(activeDurMins + groupGapMins)})</span>
                 </div>
               </div>
 
@@ -10206,8 +10208,9 @@ function renderRecreateSlotList() {
                   <i class="ti ti-player-pause text-lg"></i>
                 </div>
                 <div class="min-w-0 flex-1 pointer-events-none">
-                  <span class="text-[11px] text-gray-400 font-medium block leading-tight">Jeda</span>
+                  <span class="text-[11px] text-gray-400 font-medium block leading-tight">Jeda Antar Siaran</span>
                   <span class="text-xs sm:text-sm font-bold text-white block truncate mt-0.5">${groupGapMins} Menit ${groupGapMins === 15 ? '(Ideal)' : ''}</span>
+                  <span class="text-[10px] text-emerald-400 block truncate mt-0.5">Anti-tabrakan otomatis</span>
                 </div>
                 <i class="ti ti-chevron-down text-gray-400 text-sm ml-auto pointer-events-none flex-shrink-0"></i>
 
@@ -10486,24 +10489,28 @@ function generateSmartChainedTimes(groupIndex, count = 3) {
     const dtStr = formatLocalDateTime(curDate);
     const timeOnlyStr = dtStr.includes('T') ? dtStr.split('T')[1].slice(0, 5) : '13:00';
 
-    if (isRecurring) {
-      const schedTime = calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays);
-      newTimes.push({
-        scheduleTime: schedTime,
-        timeOnly: timeOnlyStr,
-        durationHours: durH,
-        durationMinutes: durM,
-        streamDurationMinutes: durMins
-      });
-    } else {
-      newTimes.push({
-        scheduleTime: dtStr,
-        timeOnly: timeOnlyStr,
-        durationHours: durH,
-        durationMinutes: durM,
-        streamDurationMinutes: durMins
-      });
-    }
+    const baseSlotData = {
+      scheduleTime: isRecurring ? calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays) : dtStr,
+      timeOnly: timeOnlyStr,
+      durationHours: durH,
+      durationMinutes: durM,
+      streamDurationMinutes: durMins,
+      pinnedThumbnail: group.pinnedThumbnail || null,
+      thumbnailPath: group.thumbnailPath || null,
+      thumbnailFolder: group.thumbnailFolder,
+      titleFolderId: group.titleFolderId,
+      useTitleRotation: group.useTitleRotation !== false,
+      videoId: group.videoId,
+      videoName: group.videoName,
+      audioId: group.audioId,
+      audioName: group.audioName,
+      loopVideo: group.loopVideo,
+      streamKey: group.streamKey,
+      streamId: group.streamId,
+      privacyStatus: group.privacyStatus,
+      description: group.description
+    };
+    newTimes.push(baseSlotData);
 
     curDate = new Date(curDate.getTime() + stepMinutes * 60 * 1000);
   }
@@ -10532,7 +10539,11 @@ function addCustomTimeToGroup(groupIndex) {
     group.times = [];
   }
 
-  const durMins = getGroupStreamDurationMinutes(groupIndex);
+  const lastIdx = group.times.length > 0 ? (group.times.length - 1) : 0;
+  const lastT = group.times.length > 0 ? group.times[lastIdx] : {};
+  const durMins = group.times.length > 0
+    ? getSlotDurationMinutes(groupIndex, lastIdx)
+    : getGroupStreamDurationMinutes(groupIndex);
   const durH = Math.floor(durMins / 60);
   const durM = durMins % 60;
   const gapMins = group.selectedGapMinutes !== undefined ? parseInt(group.selectedGapMinutes, 10) : 15;
@@ -10549,15 +10560,10 @@ function addCustomTimeToGroup(groupIndex) {
   }
 
   let nextDate;
-  if (group.times.length > 0) {
-    const lastIdx = group.times.length - 1;
-    const lastT = group.times[lastIdx];
-    const lastDurMins = getSlotDurationMinutes(groupIndex, lastIdx);
-    if (lastT && lastT.scheduleTime) {
-      const parsed = new Date(lastT.scheduleTime);
-      if (!isNaN(parsed.getTime())) {
-        nextDate = new Date(parsed.getTime() + (lastDurMins + gapMins) * 60 * 1000);
-      }
+  if (group.times.length > 0 && lastT && lastT.scheduleTime) {
+    const parsed = new Date(lastT.scheduleTime);
+    if (!isNaN(parsed.getTime())) {
+      nextDate = new Date(parsed.getTime() + (durMins + gapMins) * 60 * 1000);
     }
   }
 
@@ -10573,12 +10579,27 @@ function addCustomTimeToGroup(groupIndex) {
     schedTime = calculateUpcomingDateTimeForSlot(timeOnlyStr, patternVal, selectedWeeklyDays);
   }
 
+  // Inherit all media, rotation, folder, and stream key configurations from preceding slot
   group.times.push({
     scheduleTime: schedTime,
     timeOnly: timeOnlyStr,
     durationHours: durH,
     durationMinutes: durM,
-    streamDurationMinutes: durMins
+    streamDurationMinutes: durMins,
+    titleFolderId: lastT.titleFolderId !== undefined ? lastT.titleFolderId : group.titleFolderId,
+    useTitleRotation: lastT.useTitleRotation !== undefined ? lastT.useTitleRotation : (group.useTitleRotation !== false),
+    thumbnailFolder: lastT.thumbnailFolder !== undefined ? lastT.thumbnailFolder : group.thumbnailFolder,
+    pinnedThumbnail: lastT.pinnedThumbnail !== undefined ? lastT.pinnedThumbnail : (group.pinnedThumbnail || null),
+    thumbnailPath: lastT.thumbnailPath !== undefined ? lastT.thumbnailPath : (group.thumbnailPath || null),
+    videoId: lastT.videoId || group.videoId,
+    videoName: lastT.videoName || group.videoName,
+    audioId: lastT.audioId || group.audioId,
+    audioName: lastT.audioName || group.audioName,
+    loopVideo: lastT.loopVideo !== undefined ? lastT.loopVideo : group.loopVideo,
+    streamKey: lastT.streamKey || group.streamKey,
+    streamId: lastT.streamId || group.streamId,
+    privacyStatus: lastT.privacyStatus || group.privacyStatus,
+    description: lastT.description !== undefined ? lastT.description : group.description
   });
   group.times.sort((a, b) => new Date(a.scheduleTime) - new Date(b.scheduleTime));
 
@@ -10590,7 +10611,7 @@ function addCustomTimeToGroup(groupIndex) {
   if (typeof loadRecreateThumbnailRotationPreview === 'function') {
     loadRecreateThumbnailRotationPreview();
   }
-  showToast(`Jadwal jam ${timeOnlyStr} (+${durMins}m siaran + ${gapMins}m jeda) ditambahkan`);
+  showToast(`Jadwal baru jam ${timeOnlyStr} ditambahkan (Durasi ${formatDurationLabel(durMins)} + Jeda ${gapMins}m)`, 'success');
 }
 window.addCustomTimeToGroup = addCustomTimeToGroup;
 
@@ -10782,6 +10803,78 @@ function cancelEditRecreateGroupTitle(groupIndex) {
 }
 window.cancelEditRecreateGroupTitle = cancelEditRecreateGroupTitle;
 
+// Edit slot title functions (with per-slot support)
+function editRecreateSlotTitle(groupIndex, timeIndex) {
+  if (timeIndex === undefined) {
+    syncRecreateSlotsFromGroups();
+    const slot = window.recreateSlots[groupIndex];
+    if (slot) editRecreateSlotTitle(slot.groupIndex, slot.timeIndex);
+    return;
+  }
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!group.times || !group.times[timeIndex]) return;
+
+  group.times[timeIndex]._isEditingTitle = true;
+  renderRecreateSlotList();
+  setTimeout(() => {
+    const input = document.getElementById(`slotTitleInput_${groupIndex}_${timeIndex}`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 50);
+}
+window.editRecreateSlotTitle = editRecreateSlotTitle;
+
+function saveRecreateSlotTitle(groupIndex, timeIndex) {
+  if (timeIndex === undefined) {
+    syncRecreateSlotsFromGroups();
+    const slot = window.recreateSlots[groupIndex];
+    if (slot) saveRecreateSlotTitle(slot.groupIndex, slot.timeIndex);
+    return;
+  }
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (!group.times || !group.times[timeIndex]) return;
+  const slot = group.times[timeIndex];
+
+  const input = document.getElementById(`slotTitleInput_${groupIndex}_${timeIndex}`);
+  const rotToggle = document.getElementById(`slotTitleRotToggle_${groupIndex}_${timeIndex}`);
+  const useRotation = rotToggle ? rotToggle.checked : false;
+
+  if (input && input.value.trim()) {
+    slot.title = input.value.trim();
+    slot.useTitleRotation = useRotation;
+    slot.customTitle = !useRotation;
+    if (timeIndex === 0) {
+      group.title = slot.title;
+      group.useTitleRotation = slot.useTitleRotation;
+      group.customTitle = slot.customTitle;
+    }
+    showToast(`Judul Jadwal #${timeIndex + 1} berhasil diperbarui`);
+  }
+  delete slot._isEditingTitle;
+  renderRecreateSlotList();
+}
+window.saveRecreateSlotTitle = saveRecreateSlotTitle;
+
+function cancelEditRecreateSlotTitle(groupIndex, timeIndex) {
+  if (timeIndex === undefined) {
+    syncRecreateSlotsFromGroups();
+    const slot = window.recreateSlots[groupIndex];
+    if (slot) cancelEditRecreateSlotTitle(slot.groupIndex, slot.timeIndex);
+    return;
+  }
+  if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
+  const group = window.recreateBroadcastGroups[groupIndex];
+  if (group.times && group.times[timeIndex]) {
+    delete group.times[timeIndex]._isEditingTitle;
+  }
+  renderRecreateSlotList();
+}
+window.cancelEditRecreateSlotTitle = cancelEditRecreateSlotTitle;
+
 // ==========================================
 // Recreate Modal: Per-Broadcast Full Slot Editor
 // ==========================================
@@ -10884,46 +10977,66 @@ async function loadRecreateSlotTitleFolders(selectedFolderId = null) {
 }
 window.loadRecreateSlotTitleFolders = loadRecreateSlotTitleFolders;
 
-async function openRecreateGroupFullEditor(groupIndex) {
+async function openRecreateGroupFullEditor(groupIndex, timeIndex = 0) {
   if (!window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) return;
   const group = window.recreateBroadcastGroups[groupIndex];
   const template = window.currentRecreateTemplate || {};
+  const tIdx = typeof timeIndex === 'number' ? timeIndex : 0;
+  const timeSlot = (group.times && group.times[tIdx]) ? group.times[tIdx] : {};
 
   const modal = document.getElementById('recreateSlotEditModal');
   if (!modal) return;
 
   const idxInput = document.getElementById('recreateSlotEditGroupIndex');
   if (idxInput) idxInput.value = groupIndex;
+
+  const tIdxInput = document.getElementById('recreateSlotEditTimeIndex');
+  if (tIdxInput) tIdxInput.value = tIdx;
   
   const headerTitle = document.getElementById('recreateSlotEditHeaderTitle');
   if (headerTitle) {
-    headerTitle.textContent = `Edit Full Siaran #${groupIndex + 1}`;
+    const totalTimes = (group.times || []).length;
+    headerTitle.textContent = totalTimes > 1
+      ? `Edit Full Jadwal #${tIdx + 1} (Siaran #${groupIndex + 1})`
+      : `Edit Full Siaran #${groupIndex + 1}`;
   }
 
   // 1. Judul & Title Rotation
   const titleInput = document.getElementById('recreateSlotEditTitleInput');
   if (titleInput) {
-    titleInput.value = group.title || group.originalTitle || template.title || '';
+    const isRot = (timeSlot.useTitleRotation !== false && !timeSlot.customTitle && group.useTitleRotation !== false && !group.customTitle);
+    let effectiveTitle = timeSlot.title;
+    if (!effectiveTitle) {
+      if (isRot && window.recreateNextTitles && window.recreateNextTitles[tIdx]) {
+        effectiveTitle = window.recreateNextTitles[tIdx].title;
+      } else {
+        effectiveTitle = (tIdx === 0 ? group.title : null) || group.originalTitle || template.title || '';
+      }
+    }
+    titleInput.value = effectiveTitle;
   }
 
   const rotToggle = document.getElementById('recreateSlotEditRotationToggle');
   if (rotToggle) {
-    const isRot = (group.useTitleRotation !== false && !group.customTitle);
+    const isRot = (timeSlot.useTitleRotation !== false && !timeSlot.customTitle && group.useTitleRotation !== false && !group.customTitle);
     rotToggle.checked = isRot;
   }
 
   // 1b. Folder Tujuan Judul (Title Folder)
-  loadRecreateSlotTitleFolders(group.titleFolderId !== undefined ? group.titleFolderId : (template.title_folder_id || '__KEEP__'));
+  const activeTitleFolder = timeSlot.titleFolderId !== undefined 
+    ? timeSlot.titleFolderId 
+    : (group.titleFolderId !== undefined ? group.titleFolderId : (template.title_folder_id || '__KEEP__'));
+  loadRecreateSlotTitleFolders(activeTitleFolder);
 
   // 2. Status Privasi & Deskripsi Siaran
   const privSelect = document.getElementById('recreateSlotEditPrivacySelect');
   if (privSelect) {
-    privSelect.value = group.privacyStatus || template.privacy_status || template.privacyStatus || 'unlisted';
+    privSelect.value = timeSlot.privacyStatus || group.privacyStatus || template.privacy_status || template.privacyStatus || 'unlisted';
   }
 
   const descInput = document.getElementById('recreateSlotEditDescriptionInput');
   if (descInput) {
-    descInput.value = group.description !== undefined ? group.description : (template.description || '');
+    descInput.value = timeSlot.description !== undefined ? timeSlot.description : (group.description !== undefined ? group.description : (template.description || ''));
   }
 
   // 5. Durasi Jam & Menit & Loop
@@ -10931,13 +11044,20 @@ async function openRecreateGroupFullEditor(groupIndex) {
   const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
   const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
 
-  let h = group.durationHours !== undefined ? parseInt(group.durationHours, 10) : 0;
-  let m = group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : 0;
-  let totalM = group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((h * 60) + m);
+  let h = timeSlot.durationHours !== undefined 
+    ? parseInt(timeSlot.durationHours, 10) 
+    : (group.durationHours !== undefined ? parseInt(group.durationHours, 10) : 0);
+  let m = timeSlot.durationMinutes !== undefined 
+    ? parseInt(timeSlot.durationMinutes, 10) 
+    : (group.durationMinutes !== undefined ? parseInt(group.durationMinutes, 10) : 0);
+  let totalM = timeSlot.streamDurationMinutes !== undefined 
+    ? parseInt(timeSlot.streamDurationMinutes, 10) 
+    : (group.streamDurationMinutes !== undefined ? parseInt(group.streamDurationMinutes, 10) : ((h * 60) + m));
 
   // If slot duration is 0 and it has a video, resolve from video
-  if (totalM === 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
-    const matchedV = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
+  const activeVidId = timeSlot.videoId || group.videoId;
+  if (totalM === 0 && activeVidId && Array.isArray(window.allStudioVideos)) {
+    const matchedV = window.allStudioVideos.find(v => String(v.id) === String(activeVidId));
     if (matchedV && matchedV.duration) {
       const vSecs = parseStudioMediaDuration(matchedV.duration);
       if (vSecs > 0) {
@@ -10951,8 +11071,8 @@ async function openRecreateGroupFullEditor(groupIndex) {
     m = totalM % 60;
   }
 
-  // Only fall back to template duration if this is group #0 and it still has 0 mins
-  if (totalM === 0 && groupIndex === 0) {
+  // Only fall back to template duration if this is slot #0 and it still has 0 mins
+  if (totalM === 0 && groupIndex === 0 && tIdx === 0) {
     const parentTotal = parseInt(template.stream_duration_minutes, 10) || (((parseInt(template.duration_hours, 10) || 0) * 60) + (parseInt(template.duration_minutes, 10) || 0));
     if (parentTotal > 0) {
       totalM = parentTotal;
@@ -10960,7 +11080,9 @@ async function openRecreateGroupFullEditor(groupIndex) {
       m = parentTotal % 60;
     }
   }
-  const isLoop = group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : (template.loop_video !== false);
+  const isLoop = timeSlot.loopVideo !== undefined 
+    ? (timeSlot.loopVideo !== false && timeSlot.loopVideo !== 0 && timeSlot.loopVideo !== '0')
+    : (group.loopVideo !== undefined ? (group.loopVideo !== false && group.loopVideo !== 0 && group.loopVideo !== '0') : (template.loop_video !== false));
 
   if (durHInput) durHInput.value = isNaN(h) ? 0 : h;
   if (durMInput) durMInput.value = isNaN(m) ? 0 : m;
@@ -10970,22 +11092,55 @@ async function openRecreateGroupFullEditor(groupIndex) {
   // 3. Custom Stream Key Input
   const customKeyInput = document.getElementById('recreateSlotEditCustomStreamKey');
   if (customKeyInput) {
-    customKeyInput.value = group.streamKey || template.stream_key || '';
+    customKeyInput.value = timeSlot.streamKey || group.streamKey || template.stream_key || '';
   }
 
   // Show modal immediately
   modal.classList.remove('hidden');
   modal.style.display = 'block';
 
+  // Pinned Thumbnail toggle init
+  const pinToggle = document.getElementById('recreateSlotEditPinnedToggle');
+  const pinIndicator = document.getElementById('recreateSlotEditPinnedIndicator');
+  const isPinned = Boolean(timeSlot.pinnedThumbnail || (timeIndex === 0 && group.pinnedThumbnail));
+  if (pinToggle) {
+    pinToggle.checked = isPinned;
+  }
+  if (pinIndicator) {
+    if (isPinned) {
+      pinIndicator.classList.remove('hidden');
+    } else {
+      pinIndicator.classList.add('hidden');
+    }
+  }
+
   // Load dropdown options async
-  loadRecreateSlotThumbnailFolders(group.thumbnailFolder !== undefined ? group.thumbnailFolder : template.thumbnail_folder);
-  loadRecreateSlotStreams(group.accountId || template.account_id, group.streamId || template.stream_id, group.streamKey || template.stream_key);
-  loadRecreateSlotVideos(group.videoId || template.video_id);
-  loadRecreateSlotAudios(group.audioId || template.audio_id);
+  const activeThumbFolder = timeSlot.thumbnailFolder !== undefined ? timeSlot.thumbnailFolder : group.thumbnailFolder;
+  loadRecreateSlotThumbnailFolders(activeThumbFolder !== undefined ? activeThumbFolder : template.thumbnail_folder);
+  loadRecreateSlotStreams(group.accountId || template.account_id, timeSlot.streamId || group.streamId || template.stream_id, timeSlot.streamKey || group.streamKey || template.stream_key);
+  loadRecreateSlotVideos(timeSlot.videoId || group.videoId || template.video_id);
+  loadRecreateSlotAudios(timeSlot.audioId || group.audioId || template.audio_id);
 }
 window.openRecreateGroupFullEditor = openRecreateGroupFullEditor;
 
-function closeRecreateSlotEditModal() {
+function toggleRecreateSlotEditPinned(isPinned) {
+  const pinIndicator = document.getElementById('recreateSlotEditPinnedIndicator');
+  if (pinIndicator) {
+    if (isPinned) {
+      pinIndicator.classList.remove('hidden');
+    } else {
+      pinIndicator.classList.add('hidden');
+    }
+  }
+}
+window.toggleRecreateSlotEditPinned = toggleRecreateSlotEditPinned;
+
+let _isSavingRecreateFullEdit = false;
+
+function closeRecreateSlotEditModal(shouldAutoSave = true) {
+  if (shouldAutoSave && !_isSavingRecreateFullEdit) {
+    saveRecreateSlotFullEdit();
+  }
   const modal = document.getElementById('recreateSlotEditModal');
   if (modal) {
     modal.classList.add('hidden');
@@ -11406,154 +11561,238 @@ async function loadRecreateSlotAudios(selectedAudioId) {
 window.loadRecreateSlotAudios = loadRecreateSlotAudios;
 
 function saveRecreateSlotFullEdit() {
-  const idxStr = document.getElementById('recreateSlotEditGroupIndex')?.value;
-  const groupIndex = parseInt(idxStr, 10);
-  if (isNaN(groupIndex) || !window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) {
-    showToast('Slot siaran tidak valid', 'error');
-    return;
-  }
+  if (_isSavingRecreateFullEdit) return;
+  _isSavingRecreateFullEdit = true;
 
-  const group = window.recreateBroadcastGroups[groupIndex];
-
-  // 1. Judul & Title Rotation
-  const titleInput = document.getElementById('recreateSlotEditTitleInput');
-  const rotToggle = document.getElementById('recreateSlotEditRotationToggle');
-  const newTitle = titleInput ? titleInput.value.trim() : '';
-  const useRotation = rotToggle ? rotToggle.checked : true;
-
-  group.title = newTitle || group.originalTitle;
-  group.useTitleRotation = useRotation;
-  group.customTitle = (!useRotation && newTitle !== '' && newTitle !== group.originalTitle);
-
-  // 1b. Folder Tujuan Judul (Title Folder)
-  const titleFolderSelect = document.getElementById('recreateSlotEditTitleFolderSelect');
-  if (titleFolderSelect) {
-    const tfVal = titleFolderSelect.value;
-    if (tfVal === '__KEEP__') {
-      const template = window.currentRecreateTemplate || {};
-      group.titleFolderId = template.title_folder_id || null;
-    } else {
-      group.titleFolderId = tfVal || null;
+  try {
+    const idxStr = document.getElementById('recreateSlotEditGroupIndex')?.value;
+    const groupIndex = parseInt(idxStr, 10);
+    if (isNaN(groupIndex) || !window.recreateBroadcastGroups || !window.recreateBroadcastGroups[groupIndex]) {
+      return;
     }
-  }
 
-  // 2. Status Privasi & Deskripsi Siaran
-  const privSelect = document.getElementById('recreateSlotEditPrivacySelect');
-  if (privSelect) {
-    group.privacyStatus = privSelect.value || 'unlisted';
-  }
+    const tIdxStr = document.getElementById('recreateSlotEditTimeIndex')?.value;
+    const timeIndex = tIdxStr ? (parseInt(tIdxStr, 10) || 0) : 0;
 
-  const descInput = document.getElementById('recreateSlotEditDescriptionInput');
-  if (descInput) {
-    group.description = descInput.value;
-  }
+    const group = window.recreateBroadcastGroups[groupIndex];
+    const timeSlot = (group.times && group.times[timeIndex]) ? group.times[timeIndex] : null;
 
-  // 3. Thumbnail Folder
-  const thumbSelect = document.getElementById('recreateSlotEditThumbnailFolderSelect');
-  if (thumbSelect) {
-    const tVal = thumbSelect.value;
-    if (tVal === '__KEEP__') {
-      // Keep template default
-    } else if (tVal === '__ROOT__') {
-      group.thumbnailFolder = '';
-    } else {
-      group.thumbnailFolder = tVal;
+    // 1. Judul & Title Rotation
+    const titleInput = document.getElementById('recreateSlotEditTitleInput');
+    const rotToggle = document.getElementById('recreateSlotEditRotationToggle');
+    const newTitle = titleInput ? titleInput.value.trim() : '';
+    const useRotation = rotToggle ? rotToggle.checked : true;
+
+    if (timeSlot) {
+      timeSlot.title = newTitle || group.originalTitle || group.title;
+      timeSlot.useTitleRotation = useRotation;
+      timeSlot.customTitle = (!useRotation && newTitle !== '' && newTitle !== group.originalTitle);
     }
-  }
-
-  // 3. Stream Key
-  const streamSelect = document.getElementById('recreateSlotEditStreamKeySelect');
-  const customKeyInput = document.getElementById('recreateSlotEditCustomStreamKey');
-  const streamVal = streamSelect ? streamSelect.value : '';
-  const customKey = customKeyInput ? customKeyInput.value.trim() : '';
-
-  if (streamVal === '__MANUAL__') {
-    group.streamId = null;
-    group.streamKey = customKey;
-  } else if (streamVal) {
-    group.streamId = streamVal;
-    const selectedOpt = streamSelect.options[streamSelect.selectedIndex];
-    group.streamKey = customKey || selectedOpt?.dataset?.streamKey || '';
-  } else {
-    group.streamId = null;
-    group.streamKey = customKey;
-  }
-
-  // 4. Media Video & Audio
-  const videoSelect = document.getElementById('recreateSlotEditVideoSelect');
-  if (videoSelect) {
-    const vVal = videoSelect.value;
-    if (vVal) {
-      group.videoId = vVal;
-      const vOpt = videoSelect.options[videoSelect.selectedIndex];
-      group.videoName = vOpt ? vOpt.text.replace(/^[🎬📋\s]+/, '') : `Video #${vVal}`;
-    } else {
-      group.videoId = null;
-      group.videoName = null;
+    if (timeIndex === 0) {
+      group.title = newTitle || group.originalTitle;
+      group.useTitleRotation = useRotation;
+      group.customTitle = (!useRotation && newTitle !== '' && newTitle !== group.originalTitle);
     }
-  }
 
-  const audioSelect = document.getElementById('recreateSlotEditAudioSelect');
-  if (audioSelect) {
-    const aVal = audioSelect.value;
-    group.audioId = aVal || null;
-    if (aVal) {
-      const aOpt = audioSelect.options[audioSelect.selectedIndex];
-      group.audioName = aOpt ? aOpt.text.replace(/^[🎵\s]+/, '') : `Audio #${aVal}`;
-    } else {
-      group.audioName = null;
+    // 1b. Folder Tujuan Judul (Title Folder)
+    const titleFolderSelect = document.getElementById('recreateSlotEditTitleFolderSelect');
+    if (titleFolderSelect) {
+      const tfVal = titleFolderSelect.value;
+      let finalFolder = null;
+      if (tfVal === '__KEEP__') {
+        const template = window.currentRecreateTemplate || {};
+        finalFolder = template.title_folder_id || null;
+      } else {
+        finalFolder = tfVal || null;
+      }
+      
+      // Bind folder to this slot AND group defaults so all subsequent slots bind to this folder!
+      if (timeSlot) timeSlot.titleFolderId = finalFolder;
+      group.titleFolderId = finalFolder;
+      (group.times || []).forEach(t => {
+        if (!t.customTitle) {
+          t.titleFolderId = finalFolder;
+        }
+      });
     }
-  }
 
-  // 5. Durasi Lengkap & Loop Video
-  const durHInput = document.getElementById('recreateSlotEditDurationHours');
-  const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
-  const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
+    // 2. Status Privasi & Deskripsi Siaran
+    const privSelect = document.getElementById('recreateSlotEditPrivacySelect');
+    const descInput = document.getElementById('recreateSlotEditDescriptionInput');
+    const privVal = privSelect ? (privSelect.value || 'unlisted') : 'unlisted';
+    const descVal = descInput ? descInput.value : '';
 
-  let h = parseInt(durHInput?.value, 10) || 0;
-  let m = parseInt(durMInput?.value, 10) || 0;
-  let totalM = (h * 60) + m;
-  const isLoop = loopToggle ? loopToggle.checked : true;
+    if (timeSlot) {
+      timeSlot.privacyStatus = privVal;
+      timeSlot.description = descVal;
+    }
+    if (timeIndex === 0) {
+      group.privacyStatus = privVal;
+      group.description = descVal;
+    }
 
-  if (totalM === 0 && group.videoId && Array.isArray(window.allStudioVideos)) {
-    const matchedV = window.allStudioVideos.find(v => String(v.id) === String(group.videoId));
-    if (matchedV && matchedV.duration) {
-      const vSecs = parseStudioMediaDuration(matchedV.duration);
-      if (vSecs > 0) {
-        totalM = Math.max(1, Math.round(vSecs / 60));
-        h = Math.floor(totalM / 60);
-        m = totalM % 60;
+    // 3. Thumbnail Folder
+    const thumbSelect = document.getElementById('recreateSlotEditThumbnailFolderSelect');
+    if (thumbSelect) {
+      const tVal = thumbSelect.value;
+      let finalThumb = undefined;
+      if (tVal === '__ROOT__') {
+        finalThumb = '';
+      } else if (tVal && tVal !== '__KEEP__') {
+        finalThumb = tVal;
+      }
+      if (finalThumb !== undefined) {
+        if (timeSlot) timeSlot.thumbnailFolder = finalThumb;
+        if (timeIndex === 0) group.thumbnailFolder = finalThumb;
       }
     }
-  }
 
-  group.durationHours = h;
-  group.durationMinutes = m;
-  group.streamDurationMinutes = totalM;
-  group.loopVideo = isLoop;
-
-  // Sync first slot duration and cascade downstream slots
-  if (Array.isArray(group.times) && group.times.length > 0) {
-    group.times[0].durationHours = h;
-    group.times[0].durationMinutes = m;
-    group.times[0].streamDurationMinutes = totalM;
-    if (group.times.length > 1) {
-      autoAdjustSubsequentSlotsFrom(groupIndex, 0);
+    // 3b. Pinned Thumbnail setting
+    const pinToggle = document.getElementById('recreateSlotEditPinnedToggle');
+    if (pinToggle) {
+      if (pinToggle.checked) {
+        const existingPin = timeSlot.pinnedThumbnail || timeSlot.thumbnailPath || (timeIndex === 0 ? group.pinnedThumbnail || group.thumbnailPath : null) || template.pinned_thumbnail || template.thumbnail_path || true;
+        if (timeSlot) timeSlot.pinnedThumbnail = existingPin;
+        if (timeIndex === 0) group.pinnedThumbnail = existingPin;
+      } else {
+        if (timeSlot) timeSlot.pinnedThumbnail = null;
+        if (timeIndex === 0) group.pinnedThumbnail = null;
+      }
     }
-  }
 
-  // Tutup modal, sinkronkan slot, dan refresh render tampilan card
-  closeRecreateSlotEditModal();
-  syncRecreateSlotsFromGroups();
-  renderRecreateSlotList();
-  if (typeof loadRecreateTitleRotationPreview === 'function') {
-    loadRecreateTitleRotationPreview();
-  }
-  if (typeof loadRecreateThumbnailRotationPreview === 'function') {
-    loadRecreateThumbnailRotationPreview();
-  }
+    // 4. Stream Key
+    const streamSelect = document.getElementById('recreateSlotEditStreamKeySelect');
+    const customKeyInput = document.getElementById('recreateSlotEditCustomStreamKey');
+    const streamVal = streamSelect ? streamSelect.value : '';
+    const customKey = customKeyInput ? customKeyInput.value.trim() : '';
 
-  showToast(`Pengaturan Siaran #${groupIndex + 1} berhasil disimpan!`);
+    let finalStreamId = null;
+    let finalStreamKey = customKey;
+    if (streamVal === '__MANUAL__') {
+      finalStreamId = null;
+      finalStreamKey = customKey;
+    } else if (streamVal) {
+      finalStreamId = streamVal;
+      const selectedOpt = streamSelect.options[streamSelect.selectedIndex];
+      finalStreamKey = customKey || selectedOpt?.dataset?.streamKey || '';
+    }
+
+    if (timeSlot) {
+      timeSlot.streamId = finalStreamId;
+      timeSlot.streamKey = finalStreamKey;
+    }
+    if (timeIndex === 0) {
+      group.streamId = finalStreamId;
+      group.streamKey = finalStreamKey;
+    }
+
+    // 5. Media Video & Audio
+    const videoSelect = document.getElementById('recreateSlotEditVideoSelect');
+    if (videoSelect) {
+      const vVal = videoSelect.value;
+      if (vVal) {
+        const vOpt = videoSelect.options[videoSelect.selectedIndex];
+        const vName = vOpt ? vOpt.text.replace(/^[🎬📋\s]+/, '') : `Video #${vVal}`;
+        if (timeSlot) {
+          timeSlot.videoId = vVal;
+          timeSlot.videoName = vName;
+        }
+        if (timeIndex === 0) {
+          group.videoId = vVal;
+          group.videoName = vName;
+        }
+      } else {
+        if (timeSlot) {
+          timeSlot.videoId = null;
+          timeSlot.videoName = null;
+        }
+        if (timeIndex === 0) {
+          group.videoId = null;
+          group.videoName = null;
+        }
+      }
+    }
+
+    const audioSelect = document.getElementById('recreateSlotEditAudioSelect');
+    if (audioSelect) {
+      const aVal = audioSelect.value;
+      if (aVal) {
+        const aOpt = audioSelect.options[audioSelect.selectedIndex];
+        const aName = aOpt ? aOpt.text.replace(/^[🎵\s]+/, '') : `Audio #${aVal}`;
+        if (timeSlot) {
+          timeSlot.audioId = aVal;
+          timeSlot.audioName = aName;
+        }
+        if (timeIndex === 0) {
+          group.audioId = aVal;
+          group.audioName = aName;
+        }
+      } else {
+        if (timeSlot) {
+          timeSlot.audioId = null;
+          timeSlot.audioName = null;
+        }
+        if (timeIndex === 0) {
+          group.audioId = null;
+          group.audioName = null;
+        }
+      }
+    }
+
+    // 6. Durasi Lengkap & Loop Video
+    const durHInput = document.getElementById('recreateSlotEditDurationHours');
+    const durMInput = document.getElementById('recreateSlotEditDurationMinutes');
+    const loopToggle = document.getElementById('recreateSlotEditLoopToggle');
+
+    let h = parseInt(durHInput?.value, 10) || 0;
+    let m = parseInt(durMInput?.value, 10) || 0;
+    let totalM = (h * 60) + m;
+    const isLoop = loopToggle ? loopToggle.checked : true;
+
+    if (totalM === 0 && (timeSlot?.videoId || group.videoId) && Array.isArray(window.allStudioVideos)) {
+      const vidIdToMatch = timeSlot?.videoId || group.videoId;
+      const matchedV = window.allStudioVideos.find(v => String(v.id) === String(vidIdToMatch));
+      if (matchedV && matchedV.duration) {
+        const vSecs = parseStudioMediaDuration(matchedV.duration);
+        if (vSecs > 0) {
+          totalM = Math.max(1, Math.round(vSecs / 60));
+          h = Math.floor(totalM / 60);
+          m = totalM % 60;
+        }
+      }
+    }
+
+    if (timeSlot) {
+      timeSlot.durationHours = h;
+      timeSlot.durationMinutes = m;
+      timeSlot.streamDurationMinutes = totalM;
+      timeSlot.loopVideo = isLoop;
+    }
+    if (timeIndex === 0) {
+      group.durationHours = h;
+      group.durationMinutes = m;
+      group.streamDurationMinutes = totalM;
+      group.loopVideo = isLoop;
+    }
+
+    // Adjust subsequent slots start time if duration changed
+    if (Array.isArray(group.times) && group.times.length > 1) {
+      autoAdjustSubsequentSlotsFrom(groupIndex, timeIndex);
+    }
+
+    syncRecreateSlotsFromGroups();
+    renderRecreateSlotList();
+    if (typeof loadRecreateTitleRotationPreview === 'function') {
+      loadRecreateTitleRotationPreview();
+    }
+    if (typeof loadRecreateThumbnailRotationPreview === 'function') {
+      loadRecreateThumbnailRotationPreview();
+    }
+
+    showToast(`Pengaturan Jadwal #${timeIndex + 1} berhasil disimpan!`);
+  } finally {
+    _isSavingRecreateFullEdit = false;
+  }
 }
 window.saveRecreateSlotFullEdit = saveRecreateSlotFullEdit;
 
@@ -11587,21 +11826,6 @@ function removeRecreateSlot(index) {
     removeTimeFromGroup(slot.groupIndex, slot.timeIndex);
   }
 }
-function editRecreateSlotTitle(index) {
-  syncRecreateSlotsFromGroups();
-  const slot = window.recreateSlots[index];
-  if (slot) editRecreateGroupTitle(slot.groupIndex);
-}
-function saveRecreateSlotTitle(index) {
-  syncRecreateSlotsFromGroups();
-  const slot = window.recreateSlots[index];
-  if (slot) saveRecreateGroupTitle(slot.groupIndex);
-}
-function cancelEditRecreateSlotTitle(index) {
-  syncRecreateSlotsFromGroups();
-  const slot = window.recreateSlots[index];
-  if (slot) cancelEditRecreateGroupTitle(slot.groupIndex);
-}
 function removeRecreateBroadcast(index) {
   removeRecreateSlot(index);
 }
@@ -11610,9 +11834,6 @@ window.addRecreateSlot = addRecreateSlot;
 window.addRecreatePresetSlot = addRecreatePresetSlot;
 window.addRecreateQuickSlot = addRecreateQuickSlot;
 window.removeRecreateSlot = removeRecreateSlot;
-window.editRecreateSlotTitle = editRecreateSlotTitle;
-window.saveRecreateSlotTitle = saveRecreateSlotTitle;
-window.cancelEditRecreateSlotTitle = cancelEditRecreateSlotTitle;
 window.removeRecreateBroadcast = removeRecreateBroadcast;
 
 function closeRecreateFromTemplateModal() {
@@ -12275,7 +12496,9 @@ async function loadRecreateThumbnailRotationPreview() {
   if (!template) return;
 
   try {
-    const defaultFolder = template.thumbnail_folder !== undefined ? template.thumbnail_folder : null;
+    const defaultFolder = (template.thumbnail_folder !== undefined && template.thumbnail_folder !== null && template.thumbnail_folder !== '__KEEP__')
+      ? (template.thumbnail_folder === '__ROOT__' ? '' : template.thumbnail_folder)
+      : '';
     const defaultStartIndex = (template.thumbnail_index !== undefined && template.thumbnail_index !== null)
       ? template.thumbnail_index
       : 0;
@@ -12329,7 +12552,7 @@ async function loadRecreateThumbnailRotationPreview() {
       const fFolder = entry.folderName;
       const indices = entry.indices;
       const count = indices.length;
-      const sIndex = (fFolder === template.thumbnail_folder && template.thumbnail_index !== undefined && template.thumbnail_index !== null)
+      const sIndex = ((fFolder === template.thumbnail_folder || (fFolder === '' && !template.thumbnail_folder)) && template.thumbnail_index !== undefined && template.thumbnail_index !== null)
         ? template.thumbnail_index
         : 0;
 
@@ -12338,7 +12561,7 @@ async function loadRecreateThumbnailRotationPreview() {
         resultThumbnails[sIdx] = seqThumbs[seqIdx] || null;
       });
 
-      if (template.thumbnail_folder === undefined || fFolder === template.thumbnail_folder) {
+      if (template.thumbnail_folder === undefined || fFolder === template.thumbnail_folder || (fFolder === '' && !template.thumbnail_folder)) {
         primaryFinalNextThumbIndex = window.recreateFinalNextThumbnailIndex;
       }
     }
@@ -12374,9 +12597,10 @@ async function getNextThumbnailsForRecreate(startIndex, folderName, count = 1, t
       })
     });
     const data = await res.json();
-    if (data.success && Array.isArray(data.thumbnails)) {
-      window.recreateFinalNextThumbnailIndex = data.nextIndex;
-      return data.thumbnails;
+    const thumbs = Array.isArray(data.sequence) ? data.sequence : (Array.isArray(data.thumbnails) ? data.thumbnails : []);
+    if (data.success && thumbs.length > 0) {
+      window.recreateFinalNextThumbnailIndex = data.finalNextIndex !== undefined ? data.finalNextIndex : data.nextIndex;
+      return thumbs;
     }
   } catch (err) {
     console.warn('[recreate] /api/thumbnail-rotation/sequence failed:', err);
@@ -12457,28 +12681,37 @@ if (recreateFromTemplateForm) {
           }
 
           if (finalSched) {
+            const slotPinned = (t.pinnedThumbnail !== undefined)
+              ? t.pinnedThumbnail
+              : (grp.pinnedThumbnail !== undefined ? grp.pinnedThumbnail : (template.pinned_thumbnail || null));
+            const slotThumbFolder = (t.thumbnailFolder !== undefined && t.thumbnailFolder !== null && t.thumbnailFolder !== '__KEEP__')
+              ? (t.thumbnailFolder === '__ROOT__' ? '' : t.thumbnailFolder)
+              : (grp.thumbnailFolder !== undefined ? (grp.thumbnailFolder === '__ROOT__' ? '' : grp.thumbnailFolder) : template.thumbnail_folder);
+            const slotThumbPath = t.thumbnailPath || grp.thumbnailPath || template.thumbnail_path || null;
+
             broadcastsToCreate.push({
               accountId: grp.accountId || template.account_id,
               channelName: grp.channelName || template.channel_name || null,
-              title: grp.title || template.title,
+              title: t.title !== undefined ? t.title : (grp.title || template.title),
               originalTitle: grp.originalTitle || template.title,
-              customTitle: grp.customTitle,
-              useTitleRotation: grp.useTitleRotation,
-              streamId: grp.streamId !== undefined ? grp.streamId : template.stream_id,
-              streamKey: grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || ''),
-              thumbnailFolder: grp.thumbnailFolder !== undefined ? grp.thumbnailFolder : template.thumbnail_folder,
-              pinnedThumbnail: grp.pinnedThumbnail || template.pinned_thumbnail || template.thumbnail_path || null,
+              customTitle: t.customTitle !== undefined ? t.customTitle : grp.customTitle,
+              useTitleRotation: t.useTitleRotation !== undefined ? t.useTitleRotation : grp.useTitleRotation,
+              streamId: t.streamId !== undefined ? t.streamId : (grp.streamId !== undefined ? grp.streamId : template.stream_id),
+              streamKey: t.streamKey !== undefined ? t.streamKey : (grp.streamKey !== undefined ? grp.streamKey : (template.stream_key || '')),
+              thumbnailFolder: slotThumbFolder,
+              pinnedThumbnail: slotPinned,
+              thumbnailPath: slotThumbPath,
               durationHours: t.durationHours !== undefined ? t.durationHours : grp.durationHours,
               durationMinutes: t.durationMinutes !== undefined ? t.durationMinutes : grp.durationMinutes,
               streamDurationMinutes: t.streamDurationMinutes !== undefined ? t.streamDurationMinutes : grp.streamDurationMinutes,
-              loopVideo: grp.loopVideo,
-              videoId: grp.videoId || template.video_id || null,
-              audioId: grp.audioId || template.audio_id || null,
+              loopVideo: t.loopVideo !== undefined ? t.loopVideo : grp.loopVideo,
+              videoId: t.videoId || grp.videoId || template.video_id || null,
+              audioId: t.audioId || grp.audioId || template.audio_id || null,
               scheduleTime: finalSched,
               timeOnly: t.timeOnly,
-              description: grp.description !== undefined ? grp.description : (template.description || ''),
-              privacyStatus: grp.privacyStatus || template.privacy_status || 'unlisted',
-              titleFolderId: grp.titleFolderId !== undefined ? grp.titleFolderId : (template.title_folder_id || null),
+              description: t.description !== undefined ? t.description : (grp.description !== undefined ? grp.description : (template.description || '')),
+              privacyStatus: t.privacyStatus || grp.privacyStatus || template.privacy_status || 'unlisted',
+              titleFolderId: t.titleFolderId !== undefined ? t.titleFolderId : (grp.titleFolderId !== undefined ? grp.titleFolderId : (template.title_folder_id || null)),
               tags: grp.tags || template.tags,
               groupIndex: gIdx,
               timeIndex: tIdx
@@ -12671,12 +12904,19 @@ if (recreateFromTemplateForm) {
           const slotRotatedThumb = (window.recreateNextThumbnails && window.recreateNextThumbnails[i]) ? window.recreateNextThumbnails[i] : null;
 
           if (slot.pinnedThumbnail) {
-            formData.append('thumbnailPath', slot.pinnedThumbnail);
-            formData.append('isCustomThumbnail', 'true');
-            console.log('[recreate] Forwarding custom/pinned thumbnail:', slot.pinnedThumbnail);
+            const actualPin = (typeof slot.pinnedThumbnail === 'string') ? slot.pinnedThumbnail : (slot.thumbnailPath || template.thumbnail_path);
+            formData.append('thumbnailMode', 'pinned');
+            formData.append('pinnedThumbnail', actualPin || '');
+            if (actualPin) {
+              formData.append('thumbnailPath', actualPin);
+              formData.append('isCustomThumbnail', 'true');
+            }
+            console.log('[recreate] Forwarding custom/pinned thumbnail:', actualPin);
           } else if (slotRotatedThumb && slotRotatedThumb.path) {
+            formData.append('thumbnailMode', 'rotation');
             formData.append('thumbnailIndex', String(slotRotatedThumb.currentIndex));
             formData.append('thumbnailPath', slotRotatedThumb.path);
+            formData.append('isCustomThumbnail', 'true');
             console.log(`[recreate] Slot ${i + 1} using rotated thumbnail #${slotRotatedThumb.currentIndex + 1}: ${slotRotatedThumb.filename}`);
           } else if (slot.thumbnailPath && !thumbnailFolder) {
             formData.append('thumbnailPath', slot.thumbnailPath);

@@ -3052,6 +3052,7 @@
       <!-- Modal Body (Scrollable) -->
       <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
         <input type="hidden" id="recreateSlotEditGroupIndex" value="">
+        <input type="hidden" id="recreateSlotEditTimeIndex" value="0">
 
         <!-- 1. Judul & Title Rotation -->
         <div class="bg-dark-700/50 rounded-xl p-3.5 border border-gray-700/70 space-y-3">
@@ -3159,6 +3160,20 @@
             </div>
           </div>
 
+          <!-- Pinned Thumbnail Control -->
+          <div class="flex items-center justify-between pt-2 border-t border-gray-700/60 flex-wrap gap-2">
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-300 hover:text-white select-none">
+              <input type="checkbox" id="recreateSlotEditPinnedToggle" onchange="toggleRecreateSlotEditPinned(this.checked)"
+                class="rounded border-gray-600 text-amber-500 focus:ring-0 w-4 h-4 bg-dark-700">
+              <span class="flex items-center gap-1.5 font-medium">
+                <i class="ti ti-pin text-amber-400"></i> Pin thumbnail ini (tetap pada pilihan, tidak rotasi)
+              </span>
+            </label>
+            <span id="recreateSlotEditPinnedIndicator" class="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold hidden flex items-center gap-1">
+              <i class="ti ti-pin-filled text-xs"></i> Mode Dipin
+            </span>
+          </div>
+
           <!-- Manual / Custom Stream Key Input -->
           <div id="recreateSlotEditManualStreamKeyBox" class="space-y-1">
             <label class="text-[11px] font-medium text-gray-400 block">Stream Key Teks / Custom</label>
@@ -3253,7 +3268,7 @@
           class="h-8.5 px-4 bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white rounded-lg text-xs font-medium transition-colors">
           Batal
         </button>
-        <button type="button" onclick="saveRecreateSlotFullEdit()"
+        <button type="button" onclick="saveRecreateSlotFullEdit(); closeRecreateSlotEditModal(false);"
           class="h-8.5 px-4 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-md shadow-primary/20">
           <i class="ti ti-check text-xs"></i>
           <span>Simpan Perubahan</span>

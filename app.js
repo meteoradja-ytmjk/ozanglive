@@ -11848,7 +11848,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     const thumbnailIndex = parseInt(req.body.thumbnailIndex) || 0;
     let thumbnailPathFromRequest = req.body.thumbnailPath;
     let pinnedThumbnailFromRequest = req.body.pinnedThumbnail || (req.body.thumbnailMode === 'pinned' ? req.body.thumbnailPath : null) || null;
-    if (!pinnedThumbnailFromRequest && (matchedSlot || templateObj)) {
+    if (req.body.thumbnailMode === 'rotation') {
+      pinnedThumbnailFromRequest = null;
+    } else if (!pinnedThumbnailFromRequest && (matchedSlot || templateObj)) {
       if (matchedSlot && matchedSlot.pinnedThumbnail) {
         pinnedThumbnailFromRequest = matchedSlot.pinnedThumbnail;
       } else if (templateObj && templateObj.pinned_thumbnail) {
@@ -11858,7 +11860,7 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
     if (pinnedThumbnailFromRequest) {
       thumbnailPathFromRequest = pinnedThumbnailFromRequest;
     }
-    if (!thumbnailPathFromRequest && (matchedSlot || templateObj)) {
+    if (!thumbnailPathFromRequest && (matchedSlot || templateObj) && req.body.thumbnailMode !== 'rotation') {
       if (matchedSlot && (matchedSlot.pinnedThumbnail || matchedSlot.thumbnailPath)) {
         thumbnailPathFromRequest = matchedSlot.pinnedThumbnail || matchedSlot.thumbnailPath;
       } else if (templateObj && (templateObj.pinned_thumbnail || templateObj.thumbnail_path)) {
@@ -12315,6 +12317,9 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
                   reject(err);
                 } else {
                   console.log('[API] ✅ Updated GLOBAL thumbnail index for user selection:', globalStreamKeyId, '-> next index:', nextIndex, '(folder:', thumbnailFolder || 'root', ')');
+                  if (templateObj && templateObj.id) {
+                    BroadcastTemplate.updateThumbnailIndex(templateObj.id, nextIndex).catch(() => {});
+                  }
                   resolve();
                 }
               });
@@ -12811,15 +12816,6 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           console.warn('[API] Warning marking template executed:', markErr.message);
         }
       }
-    } catch (streamErr) {
-      console.error('[API] Error creating associated stream for broadcast:', streamErr.message);
-    }
-
-    invalidateBroadcastsCache(req.session.userId);
-    const returnBroadcast = isStartImmediately ? {
-      ...broadcast,
-      status: 'live',
-      lifeCycleStatus: 'live',
       isLocalScheduled: false,
       scheduledStartTime: null
     } : broadcast;
@@ -15977,8 +15973,10 @@ app.post('/api/thumbnail-rotation/sequence', isAuthenticated, async (req, res) =
     res.json({
       success: true,
       sequence: resultSequence,
+      thumbnails: resultSequence,
       startIndex: start,
       finalNextIndex: cur,
+      nextIndex: cur,
       totalCount: thumbnails.length
     });
   } catch (error) {
