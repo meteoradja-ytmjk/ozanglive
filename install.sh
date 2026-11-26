@@ -312,6 +312,23 @@ backup_existing_data() {
 # ==============================================================================
 # PM2 & ENVIRONMENT
 # ==============================================================================
+reset_pm2_daemon() {
+    local clear_dump="${1:-false}"
+    pm2 stop all >/dev/null 2>&1 || true
+    pm2 delete all >/dev/null 2>&1 || true
+    pm2 kill >/dev/null 2>&1 || true
+    pkill -9 -f "PM2 v" >/dev/null 2>&1 || true
+    rm -f "$HOME/.pm2/pids/"*.pid "$HOME/.pm2/rpc.sock" "$HOME/.pm2/pub.sock" 2>/dev/null || true
+    if [ "$clear_dump" = "true" ]; then
+        rm -f "$HOME/.pm2/dump.pm2" "$HOME/.pm2/dump.pm2.bak" 2>/dev/null || true
+    fi
+    if command -v fuser >/dev/null 2>&1; then
+        sudo fuser -k 7575/tcp >/dev/null 2>&1 || true
+    fi
+    pkill -f "node.*app\.js" >/dev/null 2>&1 || true
+    sleep 1
+}
+
 start_pm2() {
     cd "$INSTALL_DIR"
     mkdir -p "$INSTALL_DIR/logs" "$INSTALL_DIR/db" "$INSTALL_DIR/public/uploads/videos" "$INSTALL_DIR/public/uploads/thumbnails" "$INSTALL_DIR/public/uploads/avatars" "$INSTALL_DIR/public/uploads/audios" "$INSTALL_DIR/public/uploads/branding" "$INSTALL_DIR/public/uploads/rendered"
@@ -326,16 +343,31 @@ start_pm2() {
     # Bersihkan file session SQLite yang berpotensi terkunci / corrupt
     run_task "Membersihkan session lock lama" bash -c "rm -f db/sessions.db* || true"
 
-    run_task "Menghentikan seluruh instance PM2 lama (pm2 delete all)" bash -c "pm2 delete all >/dev/null 2>&1 || true"
-    if command -v fuser >/dev/null 2>&1; then
-        run_task "Membebaskan Port 7575 (fuser -k 7575/tcp)" bash -c "sudo fuser -k 7575/tcp >/dev/null 2>&1 || true"
-    fi
+    # Reset daemon PM2 & bersihkan PID lama agar tidak terjadi error 'Process with pid ... already exists'
+    local is_fresh_dump="false"
+    [ "$MODE" = "fresh" ] && is_fresh_dump="true"
+    run_task "Membersihkan daemon & PID PM2 lama" reset_pm2_daemon "$is_fresh_dump"
+
+    start_pm2_with_retry() {
+        local use_eco="$1"
+        if [ "$use_eco" = "true" ]; then
+            pm2 start ecosystem.config.js || {
+                reset_pm2_daemon "true"
+                pm2 start ecosystem.config.js
+            }
+        else
+            pm2 start app.js --name ozanglive || {
+                reset_pm2_daemon "true"
+                pm2 start app.js --name ozanglive
+            }
+        fi
+    }
 
     if [ -f "ecosystem.config.js" ]; then
-        run_task "Menjalankan OzangLive via ecosystem.config.js" pm2 start ecosystem.config.js
+        run_task "Menjalankan OzangLive via ecosystem.config.js" start_pm2_with_retry "true"
     else
         print_status "$ICON_WARN" "ecosystem.config.js tidak ditemukan, fallback ke app.js"
-        run_task "Menjalankan OzangLive via app.js" pm2 start app.js --name ozanglive
+        run_task "Menjalankan OzangLive via app.js" start_pm2_with_retry "false"
     fi
     run_task "Menyimpan konfigurasi PM2 (pm2 save)" pm2 save
 
@@ -433,10 +465,7 @@ do_fresh() {
 
         backup_existing_data "before-fresh-install"
 
-        run_task "Menghentikan seluruh instance PM2 lama (pm2 delete all)" bash -c "pm2 delete all >/dev/null 2>&1 || true && pm2 save >/dev/null 2>&1 || true"
-        if command -v fuser >/dev/null 2>&1; then
-            run_task "Membebaskan Port 7575 (fuser -k 7575/tcp)" bash -c "sudo fuser -k 7575/tcp >/dev/null 2>&1 || true"
-        fi
+        run_task "Menghentikan & membersihkan seluruh daemon PM2 lama" reset_pm2_daemon "true"
         run_task "Menghapus folder instalasi lama" rm -rf "$INSTALL_DIR"
         echo
     fi

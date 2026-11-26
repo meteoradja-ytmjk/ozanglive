@@ -12816,6 +12816,15 @@ app.post('/api/youtube/broadcasts', isAuthenticated, upload.single('thumbnail'),
           console.warn('[API] Warning marking template executed:', markErr.message);
         }
       }
+    } catch (streamErr) {
+      console.error('[API] Error creating associated stream for broadcast:', streamErr.message);
+    }
+
+    invalidateBroadcastsCache(req.session.userId);
+    const returnBroadcast = isStartImmediately ? {
+      ...broadcast,
+      status: 'live',
+      lifeCycleStatus: 'live',
       isLocalScheduled: false,
       scheduledStartTime: null
     } : broadcast;

@@ -24,7 +24,14 @@ fi
 case "$1" in
     start)
         echo -e "${GREEN}Starting OzangLive...${NC}"
-        pm2 start ecosystem.config.js
+        pm2 delete ozanglive >/dev/null 2>&1 || true
+        rm -f "$HOME/.pm2/pids/ozanglive"*.pid 2>/dev/null || true
+        if ! pm2 start ecosystem.config.js; then
+            echo -e "${YELLOW}Detected stale PM2 state/PID, resetting PM2 daemon and retrying...${NC}"
+            pm2 kill >/dev/null 2>&1 || true
+            rm -f "$HOME/.pm2/pids/"*.pid "$HOME/.pm2/rpc.sock" "$HOME/.pm2/pub.sock" 2>/dev/null || true
+            pm2 start ecosystem.config.js
+        fi
         pm2 save
         ;;
     stop)
