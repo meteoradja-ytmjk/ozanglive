@@ -715,68 +715,6 @@ button[onclick*="deleteJob"] {
     <span id="topJobsCountBadge" class="px-1.5 py-0.5 rounded-full bg-dark-700 text-gray-400 text-[10px] font-bold">0</span>
     <span id="topRenderingPulse" class="hidden w-2 h-2 rounded-full bg-blue-400 animate-pulse ml-0.5"></span>
   </button>
-  <button type="button" onclick="switchRenderTab('lyrics')" id="lyricsTab"
-    class="flex-1 px-3 md:px-6 py-2.5 font-medium text-xs md:text-sm transition-all rounded-xl text-center text-gray-400 hover:text-white hover:bg-dark-750 flex items-center justify-center gap-1.5 md:gap-2">
-    <i class="ti ti-music text-base"></i>
-    <span class="hidden sm:inline">Lyrics / Karaoke</span>
-    <span class="sm:hidden">Lyrics</span>
-  </button>
-</div>
-
-<!-- Lyrics/Karaoke Tab Content -->
-<div id="lyricsContainer" class="tab-content hidden">
-  <div class="bg-dark-800/90 backdrop-blur-md rounded-2xl border border-gray-700/60 shadow-xl shadow-black/20 p-6 md:p-8">
-    <!-- Header -->
-    <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-purple-600/20 border border-primary/30 shadow-lg shadow-primary/20 mb-4">
-        <i class="ti ti-microphone-2 text-4xl text-primary"></i>
-      </div>
-      <h3 class="text-2xl font-bold text-white mb-2">Lyrics / Karaoke</h3>
-      <p class="text-gray-400 max-w-md mx-auto text-sm">Tambahkan lirik sinkron ke video render kamu untuk membuat konten karaoke yang menarik</p>
-    </div>
-
-    <!-- Feature Preview Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-      <div class="bg-dark-750/70 rounded-2xl p-5 border border-gray-700/60 shadow-md">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-            <i class="ti ti-file-text text-xl text-blue-400"></i>
-          </div>
-          <h4 class="font-semibold text-white">Import Lirik</h4>
-        </div>
-        <p class="text-xs text-gray-400">Upload file .lrc, .srt, atau ketik manual lirik dengan timestamp</p>
-      </div>
-
-      <div class="bg-dark-750/70 rounded-2xl p-5 border border-gray-700/60 shadow-md">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
-            <i class="ti ti-palette text-xl text-purple-400"></i>
-          </div>
-          <h4 class="font-semibold text-white">Style Karaoke</h4>
-        </div>
-        <p class="text-xs text-gray-400">Pilih font, warna, animasi highlight, dan posisi teks di video</p>
-      </div>
-
-      <div class="bg-dark-750/70 rounded-2xl p-5 border border-gray-600/50 shadow-md">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-            <i class="ti ti-player-play text-xl text-emerald-400"></i>
-          </div>
-          <h4 class="font-semibold text-white">Preview & Render</h4>
-        </div>
-        <p class="text-xs text-gray-400">Preview real-time sinkronisasi lirik sebelum render final</p>
-      </div>
-    </div>
-
-    <!-- Coming Soon Badge -->
-    <div class="text-center">
-      <div class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-        <i class="ti ti-clock text-amber-400"></i>
-        <span class="text-amber-300 font-medium text-xs md:text-sm">Fitur ini sedang dalam pengembangan — Coming Soon</span>
-      </div>
-      <p class="text-gray-500 text-xs mt-3">Akan tersedia di update berikutnya</p>
-    </div>
-  </div>
 </div>
 
 <!-- TAB 1: Buat Render (Render Studio) -->
@@ -4863,39 +4801,33 @@ function clearHistory() {
 
 // ===== TAB SWITCHING =====
 function switchRenderTab(tab) {
+  const targetTab = (tab === 'jobs') ? 'jobs' : 'create';
   const createContainer = document.getElementById('createContainer');
   const jobsListContainer = document.getElementById('jobsListContainer');
-  const lyricsContainer = document.getElementById('lyricsContainer');
 
   const createTab = document.getElementById('createTab');
   const jobsTab = document.getElementById('jobsTab');
-  const lyricsTab = document.getElementById('lyricsTab');
 
   const activeClasses = 'flex-1 px-3 md:px-6 py-2.5 font-semibold text-xs md:text-sm transition-all rounded-xl text-center bg-gradient-to-r from-primary to-purple-600 text-white shadow-md shadow-primary/25 flex items-center justify-center gap-1.5 md:gap-2';
   const inactiveClasses = 'flex-1 px-3 md:px-6 py-2.5 font-medium text-xs md:text-sm transition-all rounded-xl text-center text-gray-400 hover:text-white hover:bg-dark-750 flex items-center justify-center gap-1.5 md:gap-2';
 
   if (createContainer) createContainer.classList.add('hidden');
   if (jobsListContainer) jobsListContainer.classList.add('hidden');
-  if (lyricsContainer) lyricsContainer.classList.add('hidden');
 
   if (createTab) createTab.className = inactiveClasses;
   if (jobsTab) jobsTab.className = inactiveClasses + ' relative';
-  if (lyricsTab) lyricsTab.className = inactiveClasses;
 
-  if (tab === 'create') {
+  if (targetTab === 'create') {
     if (createContainer) createContainer.classList.remove('hidden');
     if (createTab) createTab.className = activeClasses;
-  } else if (tab === 'jobs') {
+  } else if (targetTab === 'jobs') {
     if (jobsListContainer) jobsListContainer.classList.remove('hidden');
     if (jobsTab) jobsTab.className = activeClasses + ' relative';
     loadJobs();
-  } else if (tab === 'lyrics') {
-    if (lyricsContainer) lyricsContainer.classList.remove('hidden');
-    if (lyricsTab) lyricsTab.className = activeClasses;
   }
 
   try {
-    sessionStorage.setItem('activeRenderTab', tab);
+    sessionStorage.setItem('activeRenderTab', targetTab);
   } catch (_) {}
 }
 
