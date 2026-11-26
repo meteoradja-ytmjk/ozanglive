@@ -15871,6 +15871,10 @@ async function fetchThumbnailFoldersForManager() {
     
     if (data.success && data.folders) {
       folderList.innerHTML = '';
+      const folderCountBadge = document.getElementById('thumbnailManagerFolderCountBadge');
+      if (folderCountBadge) {
+        folderCountBadge.textContent = `${data.folders.length} ${data.folders.length === 1 ? 'folder' : 'folders'}`;
+      }
       
       // Show/hide empty state
       if (data.folders.length === 0) {
@@ -15956,16 +15960,14 @@ function showEmptyFolderState() {
   const folderNameMobile = document.getElementById('currentFolderNameMobile');
   
   if (loading) loading.classList.add('hidden');
-  if (gallery) gallery.innerHTML = '';
+  if (gallery) {
+    gallery.innerHTML = '';
+    gallery.classList.add('hidden');
+  }
   if (empty) {
     empty.classList.remove('hidden');
-    empty.innerHTML = `
-      <i class="ti ti-folder-off text-gray-500 text-4xl"></i>
-      <p class="text-gray-500 text-sm mt-3">Belum ada folder</p>
-      <p class="text-gray-600 text-xs mt-1">Buat folder terlebih dahulu dengan klik tombol <strong>Add</strong></p>
-    `;
   }
-  if (countEl) countEl.textContent = '(0)';
+  if (countEl) countEl.textContent = '0 items';
   if (folderCountEl) folderCountEl.textContent = '0';
   if (folderCountMobile) folderCountMobile.textContent = '0';
   if (folderNameEl) folderNameEl.textContent = '-';
@@ -16025,6 +16027,7 @@ async function fetchThumbnailsForManager(folderName) {
   // Show loading
   if (loading) loading.classList.remove('hidden');
   if (empty) empty.classList.add('hidden');
+  gallery.classList.add('hidden');
   gallery.innerHTML = '';
   
   try {
@@ -16043,11 +16046,12 @@ async function fetchThumbnailsForManager(folderName) {
       const thumbnails = data.thumbnails;
       
       // Update counts (desktop and mobile)
-      if (countEl) countEl.textContent = `(${thumbnails.length})`;
+      if (countEl) countEl.textContent = `${thumbnails.length} ${thumbnails.length === 1 ? 'item' : 'items'}`;
       if (folderCountEl) folderCountEl.textContent = thumbnails.length;
       if (folderCountMobile) folderCountMobile.textContent = thumbnails.length;
       
       // Render thumbnails
+      gallery.classList.remove('hidden');
       gallery.innerHTML = '';
       thumbnails.forEach((thumb, index) => {
         const div = document.createElement('div');
@@ -16102,7 +16106,8 @@ async function fetchThumbnailsForManager(folderName) {
       if (empty) empty.classList.add('hidden');
     } else {
       // Show empty state
-      if (countEl) countEl.textContent = '(0)';
+      gallery.classList.add('hidden');
+      if (countEl) countEl.textContent = '0 items';
       if (folderCountEl) folderCountEl.textContent = '0';
       if (folderCountMobile) folderCountMobile.textContent = '0';
       if (empty) empty.classList.remove('hidden');
@@ -16184,6 +16189,7 @@ async function handleThumbnailManagerUpload(event) {
       const empty = document.getElementById('thumbnailManagerEmpty');
       
       if (empty) empty.classList.add('hidden');
+      if (gallery) gallery.classList.remove('hidden');
       
       if (data.thumbnails && data.thumbnails.length > 0) {
         data.thumbnails.forEach((thumb, index) => {
@@ -16251,7 +16257,7 @@ async function handleThumbnailManagerUpload(event) {
         const folderCountMobile = document.getElementById('currentFolderThumbnailCountMobile');
         
         const totalCount = gallery.querySelectorAll(':scope > div').length;
-        if (countEl) countEl.textContent = `(${totalCount})`;
+        if (countEl) countEl.textContent = `${totalCount} ${totalCount === 1 ? 'item' : 'items'}`;
         if (folderCountEl) folderCountEl.textContent = totalCount;
         if (folderCountMobile) folderCountMobile.textContent = totalCount;
         
@@ -16349,13 +16355,15 @@ async function deleteThumbnailInManager(filename, folder) {
         const remaining = document.querySelectorAll('#thumbnailManagerGallery > div').length;
         console.log('[DELETE] Remaining thumbnails:', remaining);
         
-        if (countEl) countEl.textContent = `(${remaining})`;
+        if (countEl) countEl.textContent = `${remaining} ${remaining === 1 ? 'item' : 'items'}`;
         if (folderCountEl) folderCountEl.textContent = remaining;
         if (folderCountMobile) folderCountMobile.textContent = remaining;
         
         // Show empty state if no thumbnails left
         if (remaining === 0) {
+          const gallery = document.getElementById('thumbnailManagerGallery');
           const empty = document.getElementById('thumbnailManagerEmpty');
+          if (gallery) gallery.classList.add('hidden');
           if (empty) empty.classList.remove('hidden');
         }
         
