@@ -421,11 +421,12 @@
           <span id="liveCountNum" class="text-white font-bold">0</span>
           <span class="text-gray-400 text-xs">live</span>
         </div>
-        <!-- API Quota -->
-        <div class="live-stat-chip" title="API Quota">
-          <i class="ti ti-api text-cyan-400"></i>
-          <span id="quotaUsed" class="text-white font-bold">10K</span>
-          <span id="quotaChannelName" class="text-gray-400 text-xs"></span>
+        <!-- Next Live / Scheduled -->
+        <div class="live-stat-chip" id="nextScheduleChip" title="Jadwal Siaran Berikutnya">
+          <i class="ti ti-calendar-time text-cyan-400"></i>
+          <span id="scheduledCountNum" class="text-white font-bold">0</span>
+          <span class="text-gray-400 text-xs">jadwal</span>
+          <span id="nextScheduleTime" class="text-cyan-400 text-xs font-semibold hidden"></span>
         </div>
         <!-- Viewers -->
         <div class="live-stat-chip" title="Total Viewers">
@@ -461,10 +462,11 @@
             <span id="liveCountNumMobile" class="text-white font-semibold">0</span>
             <span class="text-gray-500 text-sm">live</span>
           </div>
-          <!-- Quota -->
-          <div class="flex items-center gap-1.5" title="API Quota">
-            <i class="ti ti-api text-cyan-400 text-base"></i>
-            <span id="quotaUsedMobile" class="text-white font-semibold">10K</span>
+          <!-- Next Live / Scheduled -->
+          <div class="flex items-center gap-1.5" title="Jadwal Siaran Berikutnya">
+            <i class="ti ti-calendar-time text-cyan-400 text-base"></i>
+            <span id="scheduledCountNumMobile" class="text-white font-semibold">0</span>
+            <span id="nextScheduleTimeMobile" class="text-cyan-400 text-xs font-medium hidden"></span>
           </div>
           <!-- Viewers -->
           <div class="flex items-center gap-1.5" title="Total Viewers">
@@ -494,6 +496,9 @@
     <span id="connectionStatus" class="hidden"></span>
     <span id="connectionStatusMobile" class="hidden"></span>
     <span id="connectionDetail" class="hidden"></span>
+    <span id="quotaUsed" class="hidden">10K</span>
+    <span id="quotaUsedMobile" class="hidden">10K</span>
+    <span id="quotaChannelName" class="hidden"></span>
     <span id="quotaChannelNameMobile" class="hidden"></span>
     <p id="quotaResetTime" class="hidden"></p>
     <p id="viewersDetail" class="hidden"></p>

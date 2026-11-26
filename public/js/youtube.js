@@ -450,8 +450,87 @@ function renderEmptyState(accountErrors) {
 }
 
 // Render broadcasts grouped by channel
+// Update Next Live / Scheduled chip in Live Stats bar
+function updateNextScheduleChip(broadcasts) {
+  const countEl = document.getElementById('scheduledCountNum');
+  const countMobileEl = document.getElementById('scheduledCountNumMobile');
+  const timeEl = document.getElementById('nextScheduleTime');
+  const timeMobileEl = document.getElementById('nextScheduleTimeMobile');
+  const chipEl = document.getElementById('nextScheduleChip');
+
+  const list = Array.isArray(broadcasts) ? broadcasts : [];
+  const upcoming = list.filter(b => {
+    if (!b) return false;
+    const status = String(b.lifeCycleStatus || b.lifecycle_status || b.status || '').toLowerCase();
+    return status !== 'live' && status !== 'complete' && status !== 'completed' && status !== 'ended' && status !== 'revoked';
+  });
+
+  if (countEl) countEl.textContent = upcoming.length;
+  if (countMobileEl) countMobileEl.textContent = upcoming.length;
+
+  let nextItem = null;
+  let nextMs = Infinity;
+  const nowGrace = Date.now() - 5 * 60 * 1000;
+
+  upcoming.forEach(b => {
+    const raw = b.scheduledStartTime || b.schedule_time || b.scheduleTime || null;
+    if (!raw) return;
+    const ts = new Date(raw).getTime();
+    if (!isNaN(ts) && ts >= nowGrace && ts < nextMs) {
+      nextMs = ts;
+      nextItem = { ts, title: b.title || 'Siaran Terjadwal' };
+    }
+  });
+
+  // Fallback to earliest valid timestamp if all are slightly older
+  if (!nextItem) {
+    upcoming.forEach(b => {
+      const raw = b.scheduledStartTime || b.schedule_time || b.scheduleTime || null;
+      if (!raw) return;
+      const ts = new Date(raw).getTime();
+      if (!isNaN(ts) && ts < nextMs) {
+        nextMs = ts;
+        nextItem = { ts, title: b.title || 'Siaran Terjadwal' };
+      }
+    });
+  }
+
+  if (nextItem) {
+    const d = new Date(nextItem.ts);
+    const hhmm = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jakarta' }).replace('.', ':');
+    const todayStr = new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+    const itemDayStr = d.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+    const label = (todayStr === itemDayStr) ? hhmm : `${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', timeZone: 'Asia/Jakarta' })} ${hhmm}`;
+
+    if (timeEl) {
+      timeEl.textContent = `• ${label}`;
+      timeEl.classList.remove('hidden');
+    }
+    if (timeMobileEl) {
+      timeMobileEl.textContent = label;
+      timeMobileEl.classList.remove('hidden');
+    }
+    if (chipEl) {
+      chipEl.title = `Jadwal berikutnya: ${nextItem.title} (${label} WIB)`;
+    }
+  } else {
+    if (timeEl) {
+      timeEl.textContent = '';
+      timeEl.classList.add('hidden');
+    }
+    if (timeMobileEl) {
+      timeMobileEl.textContent = '';
+      timeMobileEl.classList.add('hidden');
+    }
+    if (chipEl) {
+      chipEl.title = upcoming.length > 0 ? `${upcoming.length} siaran terjadwal` : 'Belum ada jadwal siaran';
+    }
+  }
+}
+
 function renderBroadcastsGrouped(broadcasts, accounts, accountErrors) {
   console.log('[renderBroadcastsGrouped] Starting render with', broadcasts.length, 'broadcasts');
+  updateNextScheduleChip(broadcasts);
   console.log('[renderBroadcastsGrouped] Accounts:', accounts);
   console.log('[renderBroadcastsGrouped] Sample broadcast:', broadcasts[0]);
   
@@ -1073,6 +1152,7 @@ window.clearSelection = clearSelection;
 // Render broadcasts in the UI
 function renderBroadcasts(broadcasts) {
   const container = document.getElementById('broadcastsContainer');
+  updateNextScheduleChip(broadcasts);
   if (!container) return;
   
   container.innerHTML = '';
