@@ -15831,16 +15831,16 @@ function openThumbnailManagerModal() {
   modal.classList.remove('hidden');
   modal.style.display = 'block';
   
-  // Load folders and open first folder (or show empty state)
+  // Load folders and open first folder (or Root if no folders exist)
   fetchThumbnailFoldersForManager().then(() => {
     const firstFolder = document.querySelector('.folder-item-manager');
     if (firstFolder) {
-      const folderName = firstFolder.querySelector('span.truncate')?.textContent;
-      if (folderName) {
-        openThumbnailFolderInManager(folderName);
-      }
+      const folderName = firstFolder.dataset.folder !== undefined
+        ? firstFolder.dataset.folder
+        : (firstFolder.querySelector('span.truncate')?.textContent || '');
+      openThumbnailFolderInManager(folderName);
     } else {
-      showEmptyFolderState();
+      openThumbnailFolderInManager('');
     }
   });
 }
@@ -15887,6 +15887,7 @@ async function fetchThumbnailFoldersForManager() {
         data.folders.forEach(folder => {
           const div = document.createElement('button');
           div.type = 'button';
+          div.dataset.folder = folder.name;
           div.className = `w-full folder-item-manager flex items-center justify-between gap-2 px-3 py-2.5 md:py-2 text-sm rounded-lg transition-colors hover:bg-dark-600 ${
             currentThumbnailFolderManager === folder.name 
               ? 'bg-primary/20 text-primary border border-primary/30' 
@@ -15976,17 +15977,13 @@ function showEmptyFolderState() {
   currentThumbnailFolderManager = null;
 }
 
-// Open thumbnail folder in manager
+// Open thumbnail folder in manager (empty string = Root / All thumbnails)
 function openThumbnailFolderInManager(folderName) {
-  if (!folderName) {
-    // No folder specified and no folders exist
-    showEmptyFolderState();
-    return;
-  }
+  const normalizedFolder = (folderName === null || folderName === undefined) ? '' : String(folderName);
+  currentThumbnailFolderManager = normalizedFolder;
+  const displayFolderName = normalizedFolder || 'All thumbnails (Root)';
   
-  currentThumbnailFolderManager = folderName;
-  
-  console.log('[ThumbnailManager] Opening folder:', folderName);
+  console.log('[ThumbnailManager] Opening folder:', displayFolderName);
   
   // Update folder info (Desktop)
   const folderNameEl = document.getElementById('currentFolderNameManager');
@@ -15994,13 +15991,15 @@ function openThumbnailFolderInManager(folderName) {
   // Update mobile breadcrumb
   const folderNameMobile = document.getElementById('currentFolderNameMobile');
   
-  if (folderNameEl) folderNameEl.textContent = folderName;
-  if (folderNameMobile) folderNameMobile.textContent = folderName;
+  if (folderNameEl) folderNameEl.textContent = displayFolderName;
+  if (folderNameMobile) folderNameMobile.textContent = displayFolderName;
   
   // Update folder items
   document.querySelectorAll('.folder-item-manager').forEach(item => {
-    const itemFolder = item.querySelector('span.truncate')?.textContent;
-    if (itemFolder === folderName) {
+    const itemFolder = item.dataset.folder !== undefined
+      ? item.dataset.folder
+      : (item.querySelector('span.truncate')?.textContent || '');
+    if (normalizedFolder && itemFolder === normalizedFolder) {
       item.classList.add('bg-primary/20', 'text-primary', 'border-primary/30');
       item.classList.remove('text-white', 'border-transparent');
     } else {
@@ -16009,8 +16008,8 @@ function openThumbnailFolderInManager(folderName) {
     }
   });
   
-  // Fetch thumbnails for this folder
-  fetchThumbnailsForManager(folderName);
+  // Fetch thumbnails for this folder (or Root)
+  fetchThumbnailsForManager(normalizedFolder);
 }
 
 // Fetch thumbnails for manager
@@ -16126,18 +16125,13 @@ async function handleThumbnailManagerUpload(event) {
   
   let folder = currentThumbnailFolderManager || '';
   if (!folder) {
-    const activeFolder = document.querySelector('.folder-item-manager.bg-primary\\/20') || document.querySelector('.folder-item-manager');
+    const activeFolder = document.querySelector('.folder-item-manager.bg-primary\\/20');
     if (activeFolder) {
-      folder = activeFolder.querySelector('span.truncate')?.textContent?.trim() || '';
+      folder = activeFolder.dataset.folder !== undefined
+        ? activeFolder.dataset.folder
+        : (activeFolder.querySelector('span.truncate')?.textContent?.trim() || '');
       if (folder) currentThumbnailFolderManager = folder;
     }
-  }
-  
-  // Validate: must have folder selected
-  if (!folder) {
-    showToast('Pilih folder terlebih dahulu atau buat folder baru dengan tombol Add', 'warning');
-    event.target.value = '';
-    return;
   }
   
   // Validate all files
@@ -16262,7 +16256,12 @@ async function handleThumbnailManagerUpload(event) {
         if (folderCountMobile) folderCountMobile.textContent = totalCount;
         
         // Update folder badge with actual count
-        updateFolderCountBadgeRealtime(folder, totalCount);
+        if (folder) {
+          updateFolderCountBadgeRealtime(folder, totalCount);
+        }
+      } else {
+        // Fallback: refresh from server so uploaded thumbnails always appear in Thumbnail Library
+        await fetchThumbnailsForManager(folder);
       }
     } else {
       showToast(data.error || 'Failed to upload thumbnails', 'error');
