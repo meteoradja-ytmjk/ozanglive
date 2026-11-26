@@ -57,15 +57,11 @@ function toggleConnectedAccounts() {
     console.log('[Collapsible] Expanding...');
     accountsList.style.display = 'block';
     chevron.style.transform = 'rotate(180deg)';
-    chevron.classList.remove('ti-chevron-down');
-    chevron.classList.add('ti-chevron-up');
   } else {
     // Collapse
     console.log('[Collapsible] Collapsing...');
     accountsList.style.display = 'none';
     chevron.style.transform = 'rotate(0deg)';
-    chevron.classList.remove('ti-chevron-up');
-    chevron.classList.add('ti-chevron-down');
   }
   
   console.log('[Collapsible] Toggle complete');

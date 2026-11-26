@@ -189,8 +189,8 @@
       </button>
     </div>
     
-    <!-- Accounts List - Collapsible -->
-    <div id="connectedAccountsList" class="transition-all duration-200 divide-y divide-gray-700/30" style="display: block;">
+    <!-- Accounts List - Collapsible (Collapsed by default) -->
+    <div id="connectedAccountsList" class="transition-all duration-200 divide-y divide-gray-700/30" style="display: none;">
       <% accounts.forEach(function(account, index) { 
          const displayName = account.channelName || account.channelId || ('YouTube Channel #' + account.id);
       %>
