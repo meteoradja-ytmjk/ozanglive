@@ -13072,6 +13072,9 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       }
     }
 
+    let youtubeDeleted = isLocalPending || isClearOnly;
+    let lastYoutubeError = null;
+
     // Only attempt YouTube API deletion if NOT clearOnly and NOT a local placeholder
     if (!isLocalPending && !isClearOnly) {
       let accountsToTry = [];
@@ -13088,41 +13091,63 @@ app.delete('/api/youtube/broadcasts/:id', isAuthenticated, async (req, res) => {
       }
 
       for (const account of accountsToTry) {
-        try {
-          const accessToken = await youtubeService.getAccessToken(account.clientId, account.clientSecret, account.refreshToken, 0, account.id);
-          const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
-          if (ok) {
-            console.log(`[DeleteBroadcast] Successfully deleted broadcast ${broadcastId} on YouTube for account ${account.channelName}`);
-            break;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const accessToken = await youtubeService.getAccessToken(
+              account.clientId,
+              account.clientSecret,
+              account.refreshToken,
+              attempt > 0 ? 1 : 0,
+              account.id
+            );
+            const ok = await youtubeService.deleteBroadcast(accessToken, broadcastId);
+            if (ok) {
+              console.log(`[DeleteBroadcast] Successfully deleted broadcast ${broadcastId} on YouTube for account ${account.channelName}`);
+              youtubeDeleted = true;
+              break;
+            }
+          } catch (err) {
+            if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
+              console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
+              youtubeDeleted = true;
+              break;
+            }
+            lastYoutubeError = err.message;
+            console.warn(`[DeleteBroadcast] Account ${account.channelName} attempt ${attempt + 1} failed to delete on YouTube:`, err.message);
+            if (attempt === 0) {
+              await new Promise(r => setTimeout(r, 600));
+            }
           }
-        } catch (err) {
-          if (err.code === 404 || err.status === 404 || (err.message && err.message.toLowerCase().includes('not found'))) {
-            console.log(`[DeleteBroadcast] Broadcast ${broadcastId} was already removed on YouTube Studio for account ${account.channelName}`);
-            break;
-          }
-          console.warn(`[DeleteBroadcast] Account ${account.channelName} failed to delete on YouTube:`, err.message);
         }
+        if (youtubeDeleted) break;
       }
     } else if (isClearOnly) {
       console.log(`[DeleteBroadcast] Broadcast ${broadcastId} requested clearOnly. Preserving on YouTube, clearing only locally.`);
     }
 
-    // Clean up local database and flush cache
+    if (!youtubeDeleted) {
+      return res.status(502).json({
+        success: false,
+        youtubeDeleted: false,
+        error: lastYoutubeError || 'Gagal menghapus siaran di YouTube. Silakan coba lagi.'
+      });
+    }
+
+    // Clean up local database and flush cache only after YouTube deletion (or local-only clear) succeeded
     await cleanupLocalBroadcast();
     invalidateBroadcastsCache(userId);
 
     return res.json({ 
-      success: true, 
+      success: true,
+      youtubeDeleted: !isClearOnly && !isLocalPending,
       message: isClearOnly ? 'Broadcast dibersihkan dari daftar (VOD tersimpan aman di YouTube)' : 'Broadcast berhasil dihapus dari aplikasi dan YouTube' 
     });
   } catch (error) {
     console.error('Error deleting/clearing broadcast:', error);
-    // Still clean up locally so user is never stuck with stale/undeletable broadcasts
-    await cleanupLocalBroadcast();
-    invalidateBroadcastsCache(userId);
-    return res.json({ 
-      success: true, 
-      message: 'Broadcast dihapus dari database lokal' 
+    return res.status(500).json({ 
+      success: false,
+      youtubeDeleted: false,
+      error: error.message || 'Gagal menghapus siaran'
     });
   }
 });

@@ -528,7 +528,33 @@ function updateNextScheduleChip(broadcasts) {
   }
 }
 
+// Track recently deleted broadcast IDs to prevent YouTube API eventual-consistency flicker
+window._recentlyDeletedBroadcastIds = window._recentlyDeletedBroadcastIds || new Map();
+
+function markBroadcastsRecentlyDeleted(ids) {
+  const now = Date.now();
+  (ids || []).forEach(id => {
+    if (id !== undefined && id !== null) {
+      window._recentlyDeletedBroadcastIds.set(String(id), now);
+    }
+  });
+}
+
+function filterRecentlyDeletedBroadcasts(broadcasts) {
+  if (!Array.isArray(broadcasts)) return [];
+  const now = Date.now();
+  const TTL_MS = 15000;
+  for (const [id, ts] of window._recentlyDeletedBroadcastIds.entries()) {
+    if (now - ts > TTL_MS) {
+      window._recentlyDeletedBroadcastIds.delete(id);
+    }
+  }
+  if (window._recentlyDeletedBroadcastIds.size === 0) return broadcasts;
+  return broadcasts.filter(b => b && !window._recentlyDeletedBroadcastIds.has(String(b.id)));
+}
+
 function renderBroadcastsGrouped(broadcasts, accounts, accountErrors) {
+  broadcasts = filterRecentlyDeletedBroadcasts(broadcasts);
   console.log('[renderBroadcastsGrouped] Starting render with', broadcasts.length, 'broadcasts');
   updateNextScheduleChip(broadcasts);
   console.log('[renderBroadcastsGrouped] Accounts:', accounts);
@@ -1151,6 +1177,7 @@ window.clearSelection = clearSelection;
 
 // Render broadcasts in the UI
 function renderBroadcasts(broadcasts) {
+  broadcasts = filterRecentlyDeletedBroadcasts(broadcasts);
   const container = document.getElementById('broadcastsContainer');
   updateNextScheduleChip(broadcasts);
   if (!container) return;
@@ -5799,12 +5826,14 @@ async function deleteBroadcast(broadcastId, title = null, accountId = null, trig
     let data = {};
     try { data = await response.json(); } catch (e) { /* ignore non-JSON */ }
 
-    // Idempotent: treat success, 200 OK, or 404 (already gone) as successful deletion
-    if (data.success || response.status === 404 || response.ok) {
+    // Idempotent: treat success (with YouTube deleted), 200 OK, or 404 (already gone) as successful deletion
+    if ((data.success && data.youtubeDeleted !== false) || response.status === 404) {
+      markBroadcastsRecentlyDeleted([broadcastId]);
       showToast(isCompleted ? '✓ Broadcast dibersihkan dari daftar' : '✓ Broadcast berhasil dihapus');
       removeBroadcastRowsFromDOM([broadcastId]);
       if (typeof broadcastsCache !== 'undefined' && broadcastsCache && broadcastsCache.data) {
         broadcastsCache.data = broadcastsCache.data.filter(b => String(b.id) !== String(broadcastId));
+        if (typeof updateNextScheduleChip === 'function') updateNextScheduleChip(broadcastsCache.data);
       }
       if (typeof window.loadStreams === 'function') window.loadStreams();
       if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
@@ -8732,22 +8761,27 @@ async function deleteSelectedBroadcasts() {
   };
   updateProgress();
 
-  // Delete with limited concurrency: fast, but gentle on the YouTube API
-  const CONCURRENCY = 4;
+  // Use sequential delete for <=10 items (or concurrency 2 for large batches) to prevent YouTube API rate-limit / token refresh races
+  const CONCURRENCY = selected.length <= 10 ? 1 : 2;
   let cursor = 0;
 
   async function worker() {
     while (cursor < selected.length) {
       const broadcast = selected[cursor++];
       try {
-        let url = `/api/youtube/broadcasts/${broadcast.id}`;
-        if (broadcast.accountId) {
-          url += `?accountId=${broadcast.accountId}`;
-        }
+        const lifeStatus = String(broadcast.lifeCycleStatus || broadcast.lifecycle_status || broadcast.status || '').toLowerCase();
+        const isCompleted = lifeStatus === 'complete' || lifeStatus === 'completed' || lifeStatus === 'ended';
+
+        let url = `/api/youtube/broadcasts/${encodeURIComponent(broadcast.id)}`;
+        const qp = [];
+        if (broadcast.accountId) qp.push(`accountId=${encodeURIComponent(broadcast.accountId)}`);
+        if (isCompleted) qp.push('clearOnly=true');
+        if (qp.length > 0) url += `?${qp.join('&')}`;
 
         const response = await fetch(url, {
           method: 'DELETE',
           headers: {
+            'Accept': 'application/json',
             'X-CSRF-Token': getCsrfToken()
           }
         });
@@ -8756,10 +8790,11 @@ async function deleteSelectedBroadcasts() {
         try { data = await response.json(); } catch (e) { /* ignore non-JSON */ }
 
         // Idempotent: 404 means it's already gone → count as success
-        if (data.success || response.status === 404 || response.ok) {
+        if ((data.success && data.youtubeDeleted !== false) || response.status === 404) {
           successCount++;
           deletedIds.push(broadcast.id);
         } else {
+          console.warn('[BulkDelete] Failed to delete broadcast:', broadcast.id, data.error || response.status);
           failCount++;
         }
       } catch (error) {
@@ -8778,13 +8813,17 @@ async function deleteSelectedBroadcasts() {
   }
   await Promise.all(workers);
 
-  // Remove successfully deleted rows from the DOM (no full reload)
+  // Remove only genuinely deleted rows from the DOM and cache
   if (deletedIds.length > 0) {
+    markBroadcastsRecentlyDeleted(deletedIds);
     removeBroadcastRowsFromDOM(deletedIds);
     if (typeof broadcastsCache !== 'undefined' && broadcastsCache && broadcastsCache.data) {
       const delSet = new Set(deletedIds.map(String));
       broadcastsCache.data = broadcastsCache.data.filter(b => !delSet.has(String(b.id)));
+      if (typeof updateNextScheduleChip === 'function') updateNextScheduleChip(broadcastsCache.data);
     }
+    if (typeof window.loadStreams === 'function') window.loadStreams();
+    if (typeof window.loadLiveLimitInfo === 'function') window.loadLiveLimitInfo();
   }
 
   // Reset selection state
